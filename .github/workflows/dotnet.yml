@@ -1,0 +1,36 @@
+name: dotnet
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - staging
+      - "feature/**"
+  pull_request:
+    branches:
+      - main
+      - dev
+      - staging
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore
+
+      - name: Smoke test
+        run: dotnet run --project tests\VeinModManager.SmokeTests\VeinModManager.SmokeTests.csproj -- src\VeinModManager\ModTemplate\ItemAndContainerModifier

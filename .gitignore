@@ -1,0 +1,34 @@
+# Local private files
+*.pem
+*.pfx
+*.key
+*.crt
+*.p12
+secrets/
+
+# Build output
+bin/
+obj/
+publish/
+artifacts/
+TestResults/
+
+# IDE/user state
+.vs/
+.vscode/.ropeproject/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Runtime/mod local output
+Backups/
+UE4SS_logs/
+*.dmp
+*.log
+crash_*.dmp
+
+# OS noise
+Thumbs.db
+Desktop.ini
+.DS_Store
