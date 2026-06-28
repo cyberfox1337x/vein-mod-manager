@@ -156,8 +156,8 @@ public sealed partial class ThemedTextBox : TextBox
         {
             using var graphics = Graphics.FromHdc(hdc);
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using var border = new Pen(Focused ? FocusedBorderColor : BorderColor, 1f);
-            using var path = RoundedPanel.RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), Radius);
+            using var border = new Pen(Focused ? FocusedBorderColor : BorderColor, 1.15f);
+            using var path = RoundedPanel.RoundedRect(new Rectangle(1, 1, Width - 3, Height - 3), Math.Max(1, Radius - 1));
             graphics.DrawPath(border, path);
         }
         finally

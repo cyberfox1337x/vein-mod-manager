@@ -635,7 +635,7 @@ public sealed partial class MainForm : Form
         AddTip(_itemCategoryCombo, "Pick the item group to search inside.");
         panel.Controls.Add(_itemCategoryCombo);
 
-        _itemSearchBox = NewTextBox(270, 112, 230, 28);
+        _itemSearchBox = NewTextBox(270, 112, 230, 36);
         _itemSearchBox.PlaceholderText = "Search item name";
         _itemSearchBox.Font = new Font("Segoe UI", 11F, FontStyle.Regular);
         _itemSearchBox.TextChanged += (_, _) => RefreshItemList();
@@ -1451,7 +1451,7 @@ public sealed partial class MainForm : Form
         field.Margin = new Padding(0, 0, 18, 8);
         Control input = kind == FieldKind.Bool
             ? NewCombo(14, 40, 220, BoolChoices)
-            : NewTextBox(14, 40, 220, 36);
+            : NewTextBox(20, 42, 220, 34);
         AddTip(input, kind == FieldKind.Bool
             ? $"Choose a category-wide default for {label}, or leave Game Default."
             : $"Enter a category-wide number for {label}, or leave blank for game default.");
@@ -1464,15 +1464,15 @@ public sealed partial class MainForm : Form
 
     private void AddItemField(string key, string label, FieldKind kind)
     {
-        var field = NewFieldPanel(label, 270, 98);
+        var field = NewFieldPanel(label, 270, 100);
         field.Margin = new Padding(0, 0, 18, 8);
-        var check = NewCheckBox("Use Game Default", 50, 38, 170);
+        var check = NewCheckBox("Use Game Default", 50, 40, 170);
         check.Checked = true;
         check.BackColor = InnerBack;
         AddTip(check, "Leave checked to keep the game's value. Uncheck to type a generated override.");
         Control input = kind == FieldKind.Bool
             ? NewCombo(25, 64, 220, BoolChoices)
-            : NewTextBox(25, 68, 220, 28);
+            : NewTextBox(25, 66, 220, 34);
         AddTip(input, kind == FieldKind.Bool
             ? $"Choose an override for {label}, or keep Game Default."
             : $"Type the {label} override for this one item.");
@@ -1495,7 +1495,7 @@ public sealed partial class MainForm : Form
     {
         input.Enabled = editMode;
         input.Visible = editMode;
-        field.Height = editMode ? 104 : 78;
+        field.Height = editMode ? 108 : 80;
     }
 
     private void AddCategoryNumber(Dictionary<string, LuaValue> values, string key, bool allowNegative = true)
@@ -1662,7 +1662,7 @@ public sealed partial class MainForm : Form
             BorderColor = BorderSoft,
             BackColor = PanelBack
         };
-        panel.Controls.Add(MakeLabel(label, 0, 8, width, 26, 12, FontStyle.Bold, TextMain, ContentAlignment.MiddleCenter, InnerBack));
+        panel.Controls.Add(MakeLabel(label, 16, 8, width - 32, 26, 12, FontStyle.Bold, TextMain, ContentAlignment.MiddleCenter, InnerBack));
         return panel;
     }
 
