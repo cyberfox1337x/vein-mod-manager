@@ -106,14 +106,14 @@ public static partial class LuaModService
         var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var root in CommonSteamRootCandidates())
         {
-            if (Directory.Exists(root)) roots.Add(Path.GetFullPath(root));
+            if (TryGetFullExistingDirectory(root, out var fullRoot)) roots.Add(fullRoot);
         }
 
         foreach (var root in roots.ToArray())
         {
             foreach (var library in ReadSteamLibraryFolders(root))
             {
-                if (Directory.Exists(library)) roots.Add(Path.GetFullPath(library));
+                if (TryGetFullExistingDirectory(library, out var fullLibrary)) roots.Add(fullLibrary);
             }
         }
 
@@ -131,7 +131,7 @@ public static partial class LuaModService
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         if (!string.IsNullOrWhiteSpace(programFiles)) yield return Path.Combine(programFiles, "Steam");
 
-        foreach (var drive in DriveInfo.GetDrives().Where(drive => drive.IsReady && drive.DriveType == DriveType.Fixed))
+        foreach (var drive in ReadyFixedDrives())
         {
             yield return Path.Combine(drive.RootDirectory.FullName, "SteamLibrary");
             yield return Path.Combine(drive.RootDirectory.FullName, "Steam");
@@ -143,7 +143,7 @@ public static partial class LuaModService
         yield return @"C:\Program Files (x86)\Steam\steamapps\common\Vein";
         yield return @"C:\Program Files\Steam\steamapps\common\Vein";
 
-        foreach (var drive in DriveInfo.GetDrives().Where(drive => drive.IsReady && drive.DriveType == DriveType.Fixed))
+        foreach (var drive in ReadyFixedDrives())
         {
             yield return Path.Combine(drive.RootDirectory.FullName, "SteamLibrary", "steamapps", "common", "Vein");
             yield return Path.Combine(drive.RootDirectory.FullName, "Steam", "steamapps", "common", "Vein");
@@ -152,9 +152,16 @@ public static partial class LuaModService
 
     private static string? ReadSteamInstallPath()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
-        var steamPath = Convert.ToString(key?.GetValue("SteamPath") ?? key?.GetValue("InstallPath"));
-        return string.IsNullOrWhiteSpace(steamPath) ? null : steamPath.Replace('/', Path.DirectorySeparatorChar);
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam");
+            var steamPath = Convert.ToString(key?.GetValue("SteamPath") ?? key?.GetValue("InstallPath"));
+            return string.IsNullOrWhiteSpace(steamPath) ? null : steamPath.Replace('/', Path.DirectorySeparatorChar);
+        }
+        catch (Exception ex) when (IsRecoverableFileSystemException(ex) || ex is System.Security.SecurityException)
+        {
+            return null;
+        }
     }
 
     private static IEnumerable<string> ReadSteamLibraryFolders(string steamRoot)
@@ -162,7 +169,17 @@ public static partial class LuaModService
         var libraryFoldersPath = Path.Combine(steamRoot, "steamapps", "libraryfolders.vdf");
         if (!File.Exists(libraryFoldersPath)) yield break;
 
-        foreach (Match match in SteamLibraryPathPattern.Matches(File.ReadAllText(libraryFoldersPath, Encoding.UTF8)))
+        string text;
+        try
+        {
+            text = File.ReadAllText(libraryFoldersPath, Encoding.UTF8);
+        }
+        catch (Exception ex) when (IsRecoverableFileSystemException(ex))
+        {
+            yield break;
+        }
+
+        foreach (Match match in SteamLibraryPathPattern.Matches(text))
         {
             var path = Regex.Unescape(match.Groups["path"].Value).Replace(@"\\", @"\");
             if (!string.IsNullOrWhiteSpace(path)) yield return path;
@@ -171,8 +188,66 @@ public static partial class LuaModService
 
     private static string? ReadSteamManifestValue(string manifestPath, string key)
     {
-        var match = Regex.Match(File.ReadAllText(manifestPath, Encoding.UTF8), $@"""{Regex.Escape(key)}""\s+""(?<value>[^""]+)""", RegexOptions.IgnoreCase);
-        return match.Success ? match.Groups["value"].Value : null;
+        try
+        {
+            var match = Regex.Match(File.ReadAllText(manifestPath, Encoding.UTF8), $@"""{Regex.Escape(key)}""\s+""(?<value>[^""]+)""", RegexOptions.IgnoreCase);
+            return match.Success ? match.Groups["value"].Value : null;
+        }
+        catch (Exception ex) when (IsRecoverableFileSystemException(ex))
+        {
+            return null;
+        }
+    }
+
+    private static IEnumerable<DriveInfo> ReadyFixedDrives()
+    {
+        DriveInfo[] drives;
+        try
+        {
+            drives = DriveInfo.GetDrives();
+        }
+        catch (Exception ex) when (IsRecoverableFileSystemException(ex))
+        {
+            yield break;
+        }
+
+        foreach (var drive in drives)
+        {
+            bool ready;
+            try
+            {
+                ready = drive.IsReady && drive.DriveType == DriveType.Fixed;
+            }
+            catch (Exception ex) when (IsRecoverableFileSystemException(ex))
+            {
+                continue;
+            }
+
+            if (ready) yield return drive;
+        }
+    }
+
+    private static bool TryGetFullExistingDirectory(string path, out string fullPath)
+    {
+        fullPath = "";
+        try
+        {
+            if (!Directory.Exists(path)) return false;
+            fullPath = Path.GetFullPath(path);
+            return true;
+        }
+        catch (Exception ex) when (IsRecoverableFileSystemException(ex))
+        {
+            return false;
+        }
+    }
+
+    private static bool IsRecoverableFileSystemException(Exception ex)
+    {
+        return ex is IOException
+            || ex is UnauthorizedAccessException
+            || ex is ArgumentException
+            || ex is NotSupportedException;
     }
 
     private static string? GetBundledModTemplateFolder()

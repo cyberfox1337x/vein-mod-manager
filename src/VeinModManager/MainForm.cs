@@ -387,7 +387,12 @@ public sealed partial class MainForm : Form
             {
                 logoPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Assets", "vein-logo.png");
             }
-            if (File.Exists(logoPath)) logo.Image = Image.FromFile(logoPath);
+            if (File.Exists(logoPath))
+            {
+                using var stream = File.OpenRead(logoPath);
+                using var image = Image.FromStream(stream);
+                logo.Image = new Bitmap(image);
+            }
         }
         catch
         {
@@ -950,8 +955,15 @@ public sealed partial class MainForm : Form
         var path = _modFolderBox.Text.Trim();
         if (Directory.Exists(path))
         {
-            Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
-            Log("Opened mod folder.");
+            try
+            {
+                using var process = Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
+                Log("Opened mod folder.");
+            }
+            catch (Exception ex)
+            {
+                LogError("Could not open mod folder: " + ex.Message);
+            }
         }
         else
         {
@@ -1082,8 +1094,15 @@ public sealed partial class MainForm : Form
             return;
         }
 
-        Process.Start(new ProcessStartInfo { FileName = scripts, UseShellExecute = true });
-        Log("Opened config folder.");
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo { FileName = scripts, UseShellExecute = true });
+            Log("Opened config folder.");
+        }
+        catch (Exception ex)
+        {
+            LogError("Could not open config folder: " + ex.Message);
+        }
     }
 
     private void ConfigImport_DragEnter(object? sender, DragEventArgs e)
