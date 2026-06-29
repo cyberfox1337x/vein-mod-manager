@@ -368,13 +368,6 @@ public sealed partial class ThemedComboBox : ComboBox
     {
         var centerX = bounds.Left + bounds.Width / 2;
         var centerY = bounds.Top + bounds.Height / 2 + 1;
-        var points = new[]
-        {
-            new Point(centerX - 5, centerY - 2),
-            new Point(centerX, centerY + 3),
-            new Point(centerX + 5, centerY - 2)
-        };
-
         using var pen = new Pen(MutedColor, 2f)
         {
             StartCap = LineCap.Round,
@@ -382,7 +375,8 @@ public sealed partial class ThemedComboBox : ComboBox
             LineJoin = LineJoin.Round
         };
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        graphics.DrawLines(pen, points);
+        graphics.DrawLine(pen, centerX - 5, centerY - 2, centerX, centerY + 3);
+        graphics.DrawLine(pen, centerX, centerY + 3, centerX + 5, centerY - 2);
     }
 
     [DllImport("user32.dll")]
@@ -520,12 +514,8 @@ public sealed class ThemedCheckBox : CheckBox
                 EndCap = LineCap.Round,
                 LineJoin = LineJoin.Round
             };
-            e.Graphics.DrawLines(pen, new[]
-            {
-                new Point(4, boxY + 8),
-                new Point(7, boxY + 11),
-                new Point(12, boxY + 5)
-            });
+            e.Graphics.DrawLine(pen, 4, boxY + 8, 7, boxY + 11);
+            e.Graphics.DrawLine(pen, 7, boxY + 11, 12, boxY + 5);
         }
 
         var textBounds = new Rectangle(box.Right + 8, 0, Math.Max(0, Width - box.Right - 8), Height);

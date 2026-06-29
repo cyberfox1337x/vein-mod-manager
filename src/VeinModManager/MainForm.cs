@@ -80,6 +80,18 @@ public sealed partial class MainForm : Form
         UpdateStatuses();
     }
 
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _statusTimer.Stop();
+            _statusTimer.Dispose();
+            _toolTip.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
     private void InitializeComponent()
     {
         AutoScaleMode = AutoScaleMode.None;
@@ -112,10 +124,16 @@ public sealed partial class MainForm : Form
         DrawDesignerPreview(e.Graphics);
     }
 
-    private static bool IsDesignerHosted =>
-        LicenseManager.UsageMode == LicenseUsageMode.Designtime
-        || Process.GetCurrentProcess().ProcessName.Contains("devenv", StringComparison.OrdinalIgnoreCase)
-        || Process.GetCurrentProcess().ProcessName.Contains("DesignToolsServer", StringComparison.OrdinalIgnoreCase);
+    private static readonly bool IsDesignerHosted = DetectDesignerHosted();
+
+    private static bool DetectDesignerHosted()
+    {
+        if (LicenseManager.UsageMode == LicenseUsageMode.Designtime) return true;
+
+        var processName = Path.GetFileNameWithoutExtension(Environment.ProcessPath) ?? "";
+        return processName.Contains("devenv", StringComparison.OrdinalIgnoreCase)
+            || processName.Contains("DesignToolsServer", StringComparison.OrdinalIgnoreCase);
+    }
 
     private void BuildUi()
     {
@@ -337,7 +355,6 @@ public sealed partial class MainForm : Form
         }
         catch
         {
-            // Missing logo must not block the editor.
         }
 
         sidebar.Controls.Add(logo);
@@ -1083,7 +1100,7 @@ public sealed partial class MainForm : Form
     {
         try
         {
-            var process = LuaModService.LaunchVein(_gameFolderBox.Text.Trim());
+            using var process = LuaModService.LaunchVein(_gameFolderBox.Text.Trim());
             Log(process == null ? "VEIN executable was not found." : "Launched VEIN.");
         }
         catch (Exception ex)
@@ -1098,12 +1115,14 @@ public sealed partial class MainForm : Form
         if (category == null) return;
 
         var values = new Dictionary<string, LuaValue>(StringComparer.OrdinalIgnoreCase);
-        AddCategoryNumber(values, "Weight");
-        AddCategoryNumber(values, "MaxStack", allowNegative: false);
+        var inputsValid = true;
+        inputsValid &= AddCategoryNumber(values, "Weight");
+        inputsValid &= AddCategoryNumber(values, "MaxStack", allowNegative: false);
         AddCategoryBool(values, "bStackable");
-        AddCategoryNumber(values, "MaxWeight");
-        AddCategoryNumber(values, "ExtraWeightCapacity");
-        AddCategoryNumber(values, "RunSpeedMultiplier");
+        inputsValid &= AddCategoryNumber(values, "MaxWeight");
+        inputsValid &= AddCategoryNumber(values, "ExtraWeightCapacity");
+        inputsValid &= AddCategoryNumber(values, "RunSpeedMultiplier");
+        if (!inputsValid) return;
 
         _state.EnabledCategories[category] = _categoryEnabled.Checked;
         if (values.Count == 0) _state.CategoryDefaults.Remove(category);
@@ -1145,19 +1164,22 @@ public sealed partial class MainForm : Form
             {
                 if (_state.ContainerWeightOverrides.TryGetValue(item.Category, out var existing)) existing.Remove(item.ClassName);
             }
-            else if (ReadItemNumber("MaxWeight", "Max Weight", out var maxWeight))
+            else
             {
-                GetContainerOverrides(item.Category)[item.ClassName] = maxWeight;
+                if (!ReadItemNumber("MaxWeight", "Max Weight", out var maxWeight, out var hasMaxWeight)) return;
+                if (hasMaxWeight) GetContainerOverrides(item.Category)[item.ClassName] = maxWeight;
             }
         }
         else
         {
             var values = new Dictionary<string, LuaValue>(StringComparer.OrdinalIgnoreCase);
-            AddItemNumber(values, "Weight", "Weight");
-            AddItemNumber(values, "MaxStack", "Max Stack", allowNegative: false);
+            var inputsValid = true;
+            inputsValid &= AddItemNumber(values, "Weight", "Weight");
+            inputsValid &= AddItemNumber(values, "MaxStack", "Max Stack", allowNegative: false);
             AddItemBool(values, "bStackable");
-            AddItemNumber(values, "ExtraWeightCapacity", "Extra Weight Capacity");
-            AddItemNumber(values, "RunSpeedMultiplier", "Run Speed Multiplier");
+            inputsValid &= AddItemNumber(values, "ExtraWeightCapacity", "Extra Weight Capacity");
+            inputsValid &= AddItemNumber(values, "RunSpeedMultiplier", "Run Speed Multiplier");
+            if (!inputsValid) return;
 
             if (values.Count == 0)
             {
@@ -1195,11 +1217,31 @@ public sealed partial class MainForm : Form
         UpdateStatuses();
     }
 
+    private void ClearDynamicFieldControls(Control parent)
+    {
+        foreach (Control control in parent.Controls.Cast<Control>().ToArray())
+        {
+            ClearToolTipTree(control);
+            control.Dispose();
+        }
+
+        parent.Controls.Clear();
+    }
+
+    private void ClearToolTipTree(Control control)
+    {
+        _toolTip.SetToolTip(control, null);
+        foreach (Control child in control.Controls)
+        {
+            ClearToolTipTree(child);
+        }
+    }
+
     private void RefreshCategoryEditor()
     {
         if (_categoryCombo == null || _categoryFields == null) return;
         var category = CurrentCategory();
-        _categoryFields.Controls.Clear();
+        ClearDynamicFieldControls(_categoryFields);
         _categoryInputs.Clear();
 
         if (string.IsNullOrWhiteSpace(category))
@@ -1260,7 +1302,7 @@ public sealed partial class MainForm : Form
     {
         if (_loadingUi || _itemFields == null) return;
         var item = CurrentItem();
-        _itemFields.Controls.Clear();
+        ClearDynamicFieldControls(_itemFields);
         _itemInputs.Clear();
 
         if (item == null)
@@ -1363,11 +1405,33 @@ public sealed partial class MainForm : Form
         UpdateStatuses();
     }
 
+    private static bool IsAnyProcessRunning(params string[] processNames)
+    {
+        foreach (var processName in processNames)
+        {
+            var processes = Process.GetProcessesByName(processName);
+            try
+            {
+                if (processes.Length > 0) return true;
+            }
+            finally
+            {
+                foreach (var process in processes)
+                {
+                    process.Dispose();
+                }
+            }
+        }
+
+        return false;
+    }
+
     private void UpdateStatuses()
     {
-        var gameRunning = Process.GetProcessesByName("Vein-Win64-Test").Length > 0
-            || Process.GetProcessesByName("Vein").Length > 0
-            || Process.GetProcessesByName("Vein-Win64-Shipping").Length > 0;
+        var gameRunning = IsAnyProcessRunning(
+            "Vein-Win64-Test",
+            "Vein",
+            "Vein-Win64-Shipping");
         _gameStatus.Text = gameRunning ? "Open" : "Closed";
         _gameStatus.ForeColor = gameRunning ? Green : Orange;
 
@@ -1498,10 +1562,12 @@ public sealed partial class MainForm : Form
         field.Height = editMode ? 104 : 78;
     }
 
-    private void AddCategoryNumber(Dictionary<string, LuaValue> values, string key, bool allowNegative = true)
+    private bool AddCategoryNumber(Dictionary<string, LuaValue> values, string key, bool allowNegative = true)
     {
-        if (!_categoryInputs.TryGetValue(key, out var input) || input is not TextBox box) return;
-        if (TryReadOptionalNumber(box.Text, key, out var value, allowNegative)) values[key] = value;
+        if (!_categoryInputs.TryGetValue(key, out var input) || input is not TextBox box) return true;
+        if (!TryReadOptionalNumber(box.Text, key, out var value, out var hasValue, allowNegative)) return false;
+        if (hasValue) values[key] = value;
+        return true;
     }
 
     private void AddCategoryBool(Dictionary<string, LuaValue> values, string key)
@@ -1511,9 +1577,11 @@ public sealed partial class MainForm : Form
         if (!value.IsNil) values[key] = value;
     }
 
-    private void AddItemNumber(Dictionary<string, LuaValue> values, string key, string label, bool allowNegative = true)
+    private bool AddItemNumber(Dictionary<string, LuaValue> values, string key, string label, bool allowNegative = true)
     {
-        if (ReadItemNumber(key, label, out var value, allowNegative)) values[key] = value;
+        if (!ReadItemNumber(key, label, out var value, out var hasValue, allowNegative)) return false;
+        if (hasValue) values[key] = value;
+        return true;
     }
 
     private void AddItemBool(Dictionary<string, LuaValue> values, string key)
@@ -1523,18 +1591,28 @@ public sealed partial class MainForm : Form
         if (!value.IsNil) values[key] = value;
     }
 
-    private bool ReadItemNumber(string key, string label, out LuaValue value, bool allowNegative = true)
+    private bool ReadItemNumber(string key, string label, out LuaValue value, out bool hasValue, bool allowNegative = true)
     {
         value = LuaValue.Nil;
-        if (!_itemInputs.TryGetValue(key, out var field) || field.DefaultCheck.Checked || field.Input is not TextBox box) return false;
-        return TryReadOptionalNumber(box.Text, label, out value, allowNegative);
+        hasValue = false;
+        if (!_itemInputs.TryGetValue(key, out var field) || field.DefaultCheck.Checked || field.Input is not TextBox box) return true;
+
+        var raw = box.Text.Trim();
+        if (string.IsNullOrWhiteSpace(raw) || raw.Equals("nil", StringComparison.OrdinalIgnoreCase))
+        {
+            LogError(label + " must be a number or check Use Game Default.");
+            return false;
+        }
+
+        return TryReadOptionalNumber(raw, label, out value, out hasValue, allowNegative);
     }
 
-    private bool TryReadOptionalNumber(string raw, string label, out LuaValue value, bool allowNegative = true)
+    private bool TryReadOptionalNumber(string raw, string label, out LuaValue value, out bool hasValue, bool allowNegative = true)
     {
         value = LuaValue.Nil;
+        hasValue = false;
         raw = raw.Trim();
-        if (string.IsNullOrWhiteSpace(raw) || raw.Equals("nil", StringComparison.OrdinalIgnoreCase)) return false;
+        if (string.IsNullOrWhiteSpace(raw) || raw.Equals("nil", StringComparison.OrdinalIgnoreCase)) return true;
 
         if (!decimal.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
         {
@@ -1550,6 +1628,7 @@ public sealed partial class MainForm : Form
 
         if (number >= 999999) Log(label + " is massive. Allowed for private testing.");
         value = new LuaValue(number);
+        hasValue = true;
         return true;
     }
 

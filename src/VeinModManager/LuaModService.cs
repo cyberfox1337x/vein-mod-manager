@@ -246,7 +246,7 @@ public static partial class LuaModService
     public static string CreateBackup(string modFolder)
     {
         var scripts = Path.Combine(modFolder, "Scripts");
-        var backupRoot = Path.Combine(modFolder, "Backups", DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture));
+        var backupRoot = CreateUniqueBackupFolder(modFolder);
         Directory.CreateDirectory(backupRoot);
 
         CopyIfExists(Path.Combine(scripts, "config.lua"), Path.Combine(backupRoot, "config.lua"));
@@ -323,7 +323,7 @@ public static partial class LuaModService
         var text = File.ReadAllText(configPath, Encoding.UTF8);
         if (text.Contains(PatchMarker, StringComparison.Ordinal)) return;
 
-        var backup = configPath + ".codex-backup-before-ui-config-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        var backup = CreateUniqueSiblingPath(configPath, ".codex-backup-before-ui-config-");
         File.Copy(configPath, backup, overwrite: false);
 
         text = ReplaceOnce(
@@ -386,14 +386,20 @@ public static partial class LuaModService
 
         if (File.Exists(uiConfigPath))
         {
-            var backup = uiConfigPath + ".codex-backup-before-apply-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+            var backup = CreateUniqueSiblingPath(uiConfigPath, ".codex-backup-before-apply-");
             File.Copy(uiConfigPath, backup, overwrite: false);
         }
 
-        var tempPath = uiConfigPath + ".tmp";
-        File.WriteAllText(tempPath, lua, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-        File.Copy(tempPath, uiConfigPath, overwrite: true);
-        File.Delete(tempPath);
+        var tempPath = Path.Combine(directory, Path.GetFileName(uiConfigPath) + "." + Guid.NewGuid().ToString("N") + ".tmp");
+        try
+        {
+            File.WriteAllText(tempPath, lua, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            File.Move(tempPath, uiConfigPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempPath)) File.Delete(tempPath);
+        }
     }
 
     public static string GenerateUiConfigLua(UiConfigState state)
@@ -714,6 +720,37 @@ public static partial class LuaModService
         if (balance != 0 || !lua.Contains("return UiConfig", StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Generated Lua failed the basic syntax check.");
+        }
+    }
+
+    private static string CreateUniqueBackupFolder(string modFolder)
+    {
+        var backupParent = Path.Combine(modFolder, "Backups");
+        Directory.CreateDirectory(backupParent);
+
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss-fff", CultureInfo.InvariantCulture);
+        var backupRoot = Path.Combine(backupParent, timestamp);
+        if (!Directory.Exists(backupRoot)) return backupRoot;
+
+        for (var index = 1; ; index++)
+        {
+            var candidate = Path.Combine(backupParent, timestamp + "-" + index.ToString(CultureInfo.InvariantCulture));
+            if (!Directory.Exists(candidate)) return candidate;
+        }
+    }
+
+    private static string CreateUniqueSiblingPath(string path, string suffix)
+    {
+        var directory = Path.GetDirectoryName(path) ?? ".";
+        var fileName = Path.GetFileName(path);
+        var timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture);
+        var candidate = Path.Combine(directory, fileName + suffix + timestamp);
+        if (!File.Exists(candidate) && !Directory.Exists(candidate)) return candidate;
+
+        for (var index = 1; ; index++)
+        {
+            var numbered = Path.Combine(directory, fileName + suffix + timestamp + "-" + index.ToString(CultureInfo.InvariantCulture));
+            if (!File.Exists(numbered) && !Directory.Exists(numbered)) return numbered;
         }
     }
 

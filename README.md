@@ -31,8 +31,8 @@ Requirements:
 - .NET 8 SDK
 
 ```powershell
-dotnet restore
-dotnet build
+dotnet restore tests\VeinModManager.SmokeTests\VeinModManager.SmokeTests.csproj
+dotnet build tests\VeinModManager.SmokeTests\VeinModManager.SmokeTests.csproj --no-restore
 ```
 
 ## Smoke Test

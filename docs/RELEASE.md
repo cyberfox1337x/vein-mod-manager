@@ -4,9 +4,9 @@ Use this checklist before uploading a public build.
 
 ## Code
 
-- `dotnet build` passes.
-- Smoke tests pass.
-- `dotnet publish -c Release -r win-x64 --self-contained true` passes.
+- `dotnet restore tests\VeinModManager.SmokeTests\VeinModManager.SmokeTests.csproj` passes.
+- `dotnet build tests\VeinModManager.SmokeTests\VeinModManager.SmokeTests.csproj --no-restore` passes.
+- `dotnet publish src\VeinModManager\VeinModManager.csproj -c Release -r win-x64 --self-contained true` passes.
 - No private local files are staged.
 - No generated build or diagnostic output is staged.
 
