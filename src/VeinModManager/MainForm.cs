@@ -33,26 +33,97 @@ public sealed partial class MainForm : Form
     private Label _gameStatus = null!;
     private Label _ue4ssStatus = null!;
     private Label _modStatus = null!;
+    private Label _headerSubtitle = null!;
     private Label _unsavedStatus = null!;
+    private Panel _contentShell = null!;
+    private readonly List<Control> _overviewControls = new();
+    private readonly Dictionary<string, Label> _dashboardValues = new(StringComparer.Ordinal);
+    private readonly List<string> _recentActivityLines = new();
+    private readonly ServerManagerUiState _serverState = new();
+    private RichTextBox _dashboardActivity = null!;
     private RichTextBox _log = null!;
     private readonly ToolTip _toolTip = new();
     private ToggleSwitch _toolTipsToggle = null!;
     private Label _toolTipsStatus = null!;
     private RoundedPanel _importDropZone = null!;
     private Label _importConfigPathLabel = null!;
+    private RoundedPanel _sidebar = null!;
     private readonly Dictionary<string, Control> _tabPages = new(StringComparer.Ordinal);
     private readonly Dictionary<string, RoundedButton> _tabButtons = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Control> _setupSubPages = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, RoundedButton> _setupSubButtons = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Control> _serverSubPages = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, RoundedButton> _serverSubButtons = new(StringComparer.Ordinal);
+    private readonly List<Control> _serverOverviewControls = new();
+    private FlowLayoutPanel _serverTabFlow = null!;
+    private Label _serverTypeLabel = null!;
     private RoundedButton? _settingsButton;
+    private ThemedComboBox _serverTypeCombo = null!;
+    private Panel _windowsServerPanel = null!;
+    private Panel _linuxServerPanel = null!;
+    private RoundedPanel _windowsServerActionsPanel = null!;
+    private RoundedPanel _linuxServerActionsPanel = null!;
+    private Panel _serverModePanel = null!;
+    private Control _serverManagementPane = null!;
+    private Control _serverBackupsPane = null!;
+    private Control _serverLogsPane = null!;
+    private Control _serverIntegrationsPane = null!;
+    private RoundedPanel _linuxHelperPanel = null!;
+    private Label _serverStatusValue = null!;
+    private Label _configStatusValue = null!;
+    private Label _connectionStatusValue = null!;
+    private Label _lastBackupValue = null!;
+    private RichTextBox _serverManagerLog = null!;
+    private ToggleSwitch _serverLogAutoScrollToggle = null!;
+    private ToggleSwitch _backupBeforeSaveToggle = null!;
+    private ToggleSwitch _backupBeforeUploadToggle = null!;
+    private ToggleSwitch _backupBeforeRestartToggle = null!;
+    private ListBox _recentBackupsList = null!;
+    private ListBox _modParityList = null!;
+    private CheckBox _modParityAllowExtraMods = null!;
+    private ThemedComboBox _modParityEnforcementCombo = null!;
+    private TextBox _modParityKickMessageBox = null!;
+    private Label _modParityStatusLabel = null!;
+    private readonly List<string> _modParityFolders = new();
+    private string? _lastModParityPackageZip;
+    private TextBox _windowsServerFolderBox = null!;
+    private TextBox _windowsSteamCmdBox = null!;
+    private TextBox _windowsServerNameBox = null!;
+    private TextBox _windowsDescriptionBox = null!;
+    private TextBox _windowsSessionNameBox = null!;
+    private TextBox _windowsServerPasswordBox = null!;
+    private TextBox _windowsMapSelectionBox = null!;
+    private TextBox _windowsGamePortBox = null!;
+    private TextBox _windowsQueryPortBox = null!;
+    private TextBox _windowsMaxPlayersBox = null!;
+    private ToggleSwitch _windowsEnableRconToggle = null!;
+    private TextBox _windowsRconPortBox = null!;
+    private TextBox _windowsRconPasswordBox = null!;
+    private ToggleSwitch _windowsEnableHttpApiToggle = null!;
+    private TextBox _windowsHttpApiPortBox = null!;
+    private TextBox _windowsSuperAdminsBox = null!;
+    private TextBox _linuxHostBox = null!;
+    private TextBox _linuxPortBox = null!;
+    private TextBox _linuxUsernameBox = null!;
+    private ThemedComboBox _linuxAuthTypeCombo = null!;
+    private TextBox _linuxSshKeyBox = null!;
+    private TextBox _linuxPasswordBox = null!;
+    private TextBox _linuxRemoteServerPathBox = null!;
+    private TextBox _linuxRemoteConfigPathBox = null!;
+    private string? _lastLinuxHelperZip;
+    private DateTime? _lastConfigSaveAt;
+    private DateTime? _lastConfigBackupAt;
+    private Process? _windowsServerProcess;
+    private bool _linuxConnectionTested;
 
-    private ComboBox _categoryCombo = null!;
+    private ThemedComboBox _categoryCombo = null!;
     private ToggleSwitch _categoryEnabled = null!;
-    private CheckBox _categoryAdvanced = null!;
     private FlowLayoutPanel _categoryFields = null!;
     private readonly Dictionary<string, Control> _categoryInputs = new(StringComparer.OrdinalIgnoreCase);
 
-    private ComboBox _itemCategoryCombo = null!;
+    private ThemedComboBox _itemCategoryCombo = null!;
     private TextBox _itemSearchBox = null!;
-    private ComboBox _itemCombo = null!;
+    private ThemedComboBox _itemCombo = null!;
     private CheckBox _itemAdvanced = null!;
     private Label _itemClassLabel = null!;
     private Label _itemCdoLabel = null!;
@@ -85,10 +156,10 @@ public sealed partial class MainForm : Form
         AutoScaleMode = AutoScaleMode.None;
         Text = "Vein Mod Manager";
         ClientSize = new Size(1280, 800);
-        MinimumSize = new Size(1296, 839);
-        MaximumSize = new Size(1296, 839);
-        FormBorderStyle = FormBorderStyle.FixedSingle;
-        MaximizeBox = false;
+        MinimumSize = new Size(1180, 720);
+        FormBorderStyle = FormBorderStyle.Sizable;
+        MaximizeBox = true;
+        MinimizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = AppBack;
         ForeColor = TextMain;
@@ -112,6 +183,14 @@ public sealed partial class MainForm : Form
         DrawDesignerPreview(e.Graphics);
     }
 
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        if (IsDesignerHosted) return;
+
+        ApplyResponsiveLayout();
+    }
+
     private static bool IsDesignerHosted =>
         LicenseManager.UsageMode == LicenseUsageMode.Designtime
         || Process.GetCurrentProcess().ProcessName.Contains("devenv", StringComparison.OrdinalIgnoreCase)
@@ -123,7 +202,113 @@ public sealed partial class MainForm : Form
         BuildSidebar();
         BuildHeader();
         BuildStatusCards();
+        BuildServerTopStatusCards();
         BuildTabs();
+        ApplyResponsiveLayout();
+    }
+
+    private void ApplyResponsiveLayout()
+    {
+        if (_sidebar != null)
+        {
+            _sidebar.Height = Math.Max(0, ClientSize.Height - 40);
+        }
+
+        if (_settingsButton != null)
+        {
+            _settingsButton.Left = Math.Max(220, ClientSize.Width - 84);
+        }
+
+        if (_headerSubtitle != null)
+        {
+            _headerSubtitle.Width = Math.Max(360, ClientSize.Width - 340);
+        }
+
+        if (_contentShell != null)
+        {
+            var dashboardSelected = _tabPages.TryGetValue("Dashboard", out var dashboardPage) && dashboardPage.Visible;
+            var setupSelected = _tabPages.TryGetValue("Setup", out var setupPage) && setupPage.Visible;
+            var serverSelected = _tabPages.TryGetValue("Server Manager", out var serverPage) && serverPage.Visible;
+            _contentShell.Top = serverSelected ? 222 : 116;
+            _contentShell.Width = Math.Max(720, ClientSize.Width - 260);
+            _contentShell.Height = Math.Max(420, ClientSize.Height - _contentShell.Top - 40);
+
+            foreach (var page in _tabPages.Values)
+            {
+                page.Width = _contentShell.Width;
+                page.Height = _contentShell.Height;
+            }
+
+            ResizeServerManagerLayout();
+        }
+    }
+
+    private void ResizeServerManagerLayout()
+    {
+        if (_serverOverviewControls.Count > 0)
+        {
+            var x = 220;
+            var y = 116;
+            var gap = 18;
+            var available = Math.Max(900, ClientSize.Width - x - 40);
+            var cardWidth = Math.Max(210, Math.Min(250, (available - gap * 3) / 4));
+
+            for (var index = 0; index < _serverOverviewControls.Count; index++)
+            {
+                var card = _serverOverviewControls[index];
+                card.Left = x + (cardWidth + gap) * index;
+                card.Top = y;
+                card.Width = cardWidth;
+            }
+        }
+
+        if (!_tabPages.TryGetValue("Server Manager", out var serverPage) || serverPage is not Control panel)
+        {
+            return;
+        }
+
+        var innerWidth = Math.Max(900, panel.Width - 56);
+        if (_serverTypeCombo != null)
+        {
+            _serverTypeCombo.Width = 310;
+            _serverTypeCombo.Left = Math.Max(610, panel.Width - _serverTypeCombo.Width - 30);
+            ConfigureComboDropDown(_serverTypeCombo);
+        }
+
+        if (_serverTypeLabel != null && _serverTypeCombo != null)
+        {
+            _serverTypeLabel.Left = _serverTypeCombo.Left - _serverTypeLabel.Width - 16;
+        }
+
+        if (_serverTabFlow != null)
+        {
+            _serverTabFlow.Width = innerWidth;
+        }
+
+        foreach (var page in _serverSubPages.Values)
+        {
+            page.Width = innerWidth;
+            page.Height = Math.Max(300, panel.Height - page.Top - 28);
+        }
+
+        if (_serverModePanel != null)
+        {
+            _serverModePanel.Width = Math.Max(930, innerWidth);
+            _serverModePanel.Height = 300;
+        }
+
+        var modeWidth = _serverModePanel?.Width ?? innerWidth;
+        if (_windowsServerPanel != null)
+        {
+            _windowsServerPanel.Width = Math.Max(930, modeWidth);
+            _windowsServerPanel.Height = 300;
+        }
+
+        if (_linuxServerPanel != null)
+        {
+            _linuxServerPanel.Width = Math.Max(930, modeWidth);
+            _linuxServerPanel.Height = 300;
+        }
     }
 
     private void DrawDesignerPreview(Graphics graphics)
@@ -134,8 +319,9 @@ public sealed partial class MainForm : Form
         DrawPreviewPanel(graphics, new Rectangle(20, 20, 172, 740), 14, PanelBack, BorderSoft);
         DrawPreviewLogo(graphics, new Rectangle(46, 74, 122, 122));
         DrawPreviewLine(graphics, 38, 230, 136);
-        DrawPreviewText(graphics, "Steps", 46, 260, 14, FontStyle.Bold, TextMuted);
-        DrawPreviewText(graphics, "1. Select folder\n2. Pick category\n3. Change values\n4. Save config", 46, 296, 12, FontStyle.Regular, TextMuted);
+        DrawPreviewTab(graphics, "Setup", 42, 258, 128, selected: true);
+        DrawPreviewTab(graphics, "Server Manager", 42, 310, 128, selected: false);
+        DrawPreviewTab(graphics, "Log", 42, 362, 128, selected: false);
 
         DrawPreviewText(graphics, "Vein Manager", 220, 72, 28, FontStyle.Bold, TextMain);
         DrawPreviewText(graphics, "Modify VEIN item, backpack, vehicle, and container values without editing config files.", 222, 116, 13, FontStyle.Regular, TextMuted);
@@ -146,27 +332,22 @@ public sealed partial class MainForm : Form
         DrawPreviewStatusCard(graphics, "UE4SS", "Found", "Detected in game folder", Green, 498, 148);
         DrawPreviewStatusCard(graphics, "Mod", "Found", "ItemAndContainerModifier", Green, 776, 148);
 
-        DrawPreviewTab(graphics, "Setup", 220, 252, 136, selected: true);
-        DrawPreviewTab(graphics, "Category Defaults", 364, 252, 170, selected: false);
-        DrawPreviewTab(graphics, "Item Overrides", 542, 252, 170, selected: false);
-        DrawPreviewTab(graphics, "Presets", 720, 252, 136, selected: false);
-        DrawPreviewTab(graphics, "Log", 864, 252, 120, selected: false);
-
-        DrawPreviewPanel(graphics, new Rectangle(220, 308, 1020, 484), 12, PanelBack, Border);
-        DrawPreviewText(graphics, "Setup", 256, 340, 20, FontStyle.Bold, TextMain);
-        DrawPreviewText(graphics, "Select your VEIN install and the UE4SS mod folder. The editor writes generated overrides only.", 256, 378, 13, FontStyle.Regular, TextMuted);
-        DrawPreviewText(graphics, "Game folder", 256, 428, 13, FontStyle.Bold, TextMuted);
-        DrawPreviewTextBox(graphics, @"C:\Program Files (x86)\Steam\steamapps\common\Vein", 256, 452, 660);
-        DrawPreviewButton(graphics, "Browse", 930, 448, 110, 44, main: false);
-        DrawPreviewButton(graphics, "Auto Detect", 1054, 448, 126, 44, main: false);
-        DrawPreviewText(graphics, "Mod folder", 256, 524, 13, FontStyle.Bold, TextMuted);
-        DrawPreviewTextBox(graphics, @"C:\Program Files (x86)\Steam\steamapps\common\Vein\Vein\Binaries\Win64\ue4ss\Mods\ItemAndContainerModifier", 256, 548, 660);
-        DrawPreviewButton(graphics, "Browse", 930, 544, 110, 44, main: false);
-        DrawPreviewButton(graphics, "Open Folder", 1054, 544, 126, 44, main: false);
-        DrawPreviewText(graphics, "No unsaved changes (7 edits)", 256, 658, 13, FontStyle.Bold, Cyan);
-        DrawPreviewButton(graphics, "Save Config", 256, 694, 190, 54, main: true);
-        DrawPreviewButton(graphics, "Backup Now", 462, 694, 170, 54, main: false);
-        DrawPreviewButton(graphics, "Launch VEIN", 652, 694, 170, 54, main: false);
+        DrawPreviewPanel(graphics, new Rectangle(220, 222, 1020, 570), 12, PanelBack, Border);
+        DrawPreviewText(graphics, "Setup", 256, 254, 20, FontStyle.Bold, TextMain);
+        DrawPreviewButton(graphics, "Readme", 1054, 250, 126, 44, main: false);
+        DrawPreviewText(graphics, "Select your VEIN install and the UE4SS mod folder. The editor writes generated overrides only.", 256, 292, 13, FontStyle.Regular, TextMuted);
+        DrawPreviewText(graphics, "Game folder", 256, 342, 13, FontStyle.Bold, TextMuted);
+        DrawPreviewTextBox(graphics, @"C:\Program Files (x86)\Steam\steamapps\common\Vein", 256, 366, 660);
+        DrawPreviewButton(graphics, "Browse", 930, 362, 110, 44, main: false);
+        DrawPreviewButton(graphics, "Auto Detect", 1054, 362, 126, 44, main: false);
+        DrawPreviewText(graphics, "Mod folder", 256, 438, 13, FontStyle.Bold, TextMuted);
+        DrawPreviewTextBox(graphics, @"C:\Program Files (x86)\Steam\steamapps\common\Vein\Vein\Binaries\Win64\ue4ss\Mods\ItemAndContainerModifier", 256, 462, 660);
+        DrawPreviewButton(graphics, "Browse", 930, 458, 110, 44, main: false);
+        DrawPreviewButton(graphics, "Open Folder", 1054, 458, 126, 44, main: false);
+        DrawPreviewText(graphics, "No unsaved changes (7 edits)", 256, 616, 13, FontStyle.Bold, Cyan);
+        DrawPreviewButton(graphics, "Save Config", 256, 652, 190, 54, main: true);
+        DrawPreviewButton(graphics, "Backup Now", 462, 652, 170, 54, main: false);
+        DrawPreviewButton(graphics, "Launch VEIN", 652, 652, 170, 54, main: false);
     }
 
     private static void DrawPreviewLogo(Graphics graphics, Rectangle bounds)
@@ -313,8 +494,8 @@ public sealed partial class MainForm : Form
 
     private void BuildSidebar()
     {
-        var sidebar = NewPanel(18, 20, 20, 172, 740);
-        Controls.Add(sidebar);
+        _sidebar = NewPanel(18, 20, 20, 172, 740);
+        Controls.Add(_sidebar);
 
         var logo = new PictureBox
         {
@@ -340,10 +521,8 @@ public sealed partial class MainForm : Form
             // Missing logo must not block the editor.
         }
 
-        sidebar.Controls.Add(logo);
-        sidebar.Controls.Add(Line(18, 178, 136));
-        sidebar.Controls.Add(MakeLabel("Steps", 20, 204, 120, 24, 14, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
-        sidebar.Controls.Add(MakeLabel("1. Select folder\n2. Pick category\n3. Change values\n4. Save config", 20, 240, 132, 118, 12, FontStyle.Regular, TextMuted, ContentAlignment.TopLeft, PanelBack));
+        _sidebar.Controls.Add(logo);
+        _sidebar.Controls.Add(Line(18, 178, 136));
     }
 
     private static Icon? LoadWindowIcon()
@@ -361,7 +540,8 @@ public sealed partial class MainForm : Form
     private void BuildHeader()
     {
         Controls.Add(MakeLabel("Vein Manager", 220, 30, 610, 42, 28, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, AppBack));
-        Controls.Add(MakeLabel("Modify VEIN item, backpack, vehicle, and container values without editing config files.", 222, 74, 880, 28, 13, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, AppBack));
+        _headerSubtitle = MakeLabel("Modify VEIN item, backpack, vehicle, and container values without editing config files.", 222, 74, 880, 28, 13, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, AppBack);
+        Controls.Add(_headerSubtitle);
 
         _settingsButton = MakeButton("\uE713", 1196, 28, 52, 52, () => ShowTab("Settings"));
         _settingsButton.AccessibleName = "Settings";
@@ -375,6 +555,7 @@ public sealed partial class MainForm : Form
 
     private void BuildStatusCards()
     {
+        _overviewControls.Clear();
         var x = 220;
         var y = 116;
         var w = 260;
@@ -383,15 +564,45 @@ public sealed partial class MainForm : Form
 
         var game = NewStatCard("Game", "Closed", "VEIN process", Orange, x, y, w, h);
         _gameStatus = (Label)game.Tag!;
+        _overviewControls.Add(game);
         Controls.Add(game);
 
         var ue4ss = NewStatCard("UE4SS", "Missing", "Detected in game folder", Orange, x + w + gap, y, w, h);
         _ue4ssStatus = (Label)ue4ss.Tag!;
+        _overviewControls.Add(ue4ss);
         Controls.Add(ue4ss);
 
         var mod = NewStatCard("Mod", "Missing", "ItemAndContainerModifier", Orange, x + (w + gap) * 2, y, w, h);
         _modStatus = (Label)mod.Tag!;
+        _overviewControls.Add(mod);
         Controls.Add(mod);
+    }
+
+    private void BuildServerTopStatusCards()
+    {
+        _serverOverviewControls.Clear();
+        var x = 220;
+        var y = 116;
+        var w = 220;
+        var h = 92;
+        var gap = 18;
+
+        var server = NewStatCard("Server Status", "Stopped", "Local/remote process", Orange, x, y, w, h);
+        var config = NewStatCard("Config Status", "Not Saved", "No server config write", Orange, x + w + gap, y, w, h);
+        var connection = NewStatCard("Connection Status", "Not Connected", "Test required", Orange, x + (w + gap) * 2, y, w, h);
+        var backup = NewStatCard("Last Backup", "None", "Backup before changes", TextMuted, x + (w + gap) * 3, y, w, h);
+
+        _serverStatusValue = (Label)server.Tag!;
+        _configStatusValue = (Label)config.Tag!;
+        _connectionStatusValue = (Label)connection.Tag!;
+        _lastBackupValue = (Label)backup.Tag!;
+
+        foreach (var card in new[] { server, config, connection, backup })
+        {
+            card.Visible = false;
+            _serverOverviewControls.Add(card);
+            Controls.Add(card);
+        }
     }
 
     private void BuildTabs()
@@ -404,35 +615,25 @@ public sealed partial class MainForm : Form
             Left = 220,
             Top = 222,
             Width = 1020,
-            Height = 538,
+            Height = 570,
             BackColor = AppBack
         };
+        _contentShell = shell;
 
+        _tabPages["Dashboard"] = BuildDashboardTab();
         _tabPages["Setup"] = BuildSetupTab();
         _tabPages["Settings"] = BuildSettingsTab();
-        _tabPages["Category Defaults"] = BuildCategoryTab();
-        _tabPages["Item Overrides"] = BuildItemTab();
-        _tabPages["Presets"] = BuildPresetTab();
+        _tabPages["Server Manager"] = BuildServerManagerTab();
         _tabPages["Log"] = BuildLogTab();
 
-        var tabWidths = new Dictionary<string, int>(StringComparer.Ordinal)
+        var y = 214;
+        foreach (var title in new[] { "Dashboard", "Setup", "Server Manager", "Log" })
         {
-            ["Setup"] = 136,
-            ["Category Defaults"] = 170,
-            ["Item Overrides"] = 170,
-            ["Presets"] = 136,
-            ["Log"] = 120
-        };
-
-        var x = 0;
-        const int tabGap = 8;
-        foreach (var title in tabWidths.Keys)
-        {
-            var button = NewTabButton(title, x, 0, tabWidths[title]);
+            var button = NewSidebarTabButton(title, 18, y);
             button.Click += (_, _) => ShowTab(title);
             _tabButtons[title] = button;
-            shell.Controls.Add(button);
-            x += button.Width + tabGap;
+            _sidebar.Controls.Add(button);
+            y += 52;
         }
 
         foreach (var page in _tabPages.Values)
@@ -442,7 +643,7 @@ public sealed partial class MainForm : Form
         }
 
         Controls.Add(shell);
-        ShowTab("Setup");
+        ShowTab("Dashboard");
     }
 
     private void ShowTab(string title)
@@ -474,12 +675,149 @@ public sealed partial class MainForm : Form
             _settingsButton.BorderColor = settingsSelected ? PurpleLight : BorderSoft;
             _settingsButton.Invalidate();
         }
+
+        var dashboardSelected = title.Equals("Dashboard", StringComparison.Ordinal);
+        var setupSelected = title.Equals("Setup", StringComparison.Ordinal);
+        var serverSelected = title.Equals("Server Manager", StringComparison.Ordinal);
+        _headerSubtitle.Visible = dashboardSelected || setupSelected;
+        foreach (var control in _overviewControls)
+        {
+            control.Visible = false;
+        }
+
+        foreach (var control in _serverOverviewControls)
+        {
+            control.Visible = serverSelected;
+        }
+
+        if (_contentShell != null)
+        {
+            _contentShell.Top = serverSelected ? 222 : 116;
+            _contentShell.Height = Math.Max(420, ClientSize.Height - _contentShell.Top - 40);
+        }
+
+        ApplyResponsiveLayout();
+        RefreshDashboard();
+    }
+
+    private RoundedPanel BuildDashboardTab()
+    {
+        var panel = NewPanel(12, 0, 0, 1020, 570);
+        panel.Controls.Add(MakeLabel("Dashboard", 28, 24, 360, 34, 20, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
+        panel.Controls.Add(MakeLabel("Overview, loaded data, config activity, and server status at a glance.", 30, 62, 760, 28, 13, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+
+        AddDashboardMetric(panel, "Game Status", "Closed", "VEIN process", "GameStatus", 28, 112);
+        AddDashboardMetric(panel, "UE4SS Status", "Missing", "Detected in game folder", "Ue4ssStatus", 274, 112);
+        AddDashboardMetric(panel, "Mod Status", "Missing", "ItemAndContainerModifier", "ModStatus", 520, 112);
+        AddDashboardMetric(panel, "Server Summary", "No data yet", "Server Manager status", "ServerSummary", 766, 112);
+
+        AddDashboardMetric(panel, "Loaded Categories", "0", "Real count from mod data", "LoadedCategories", 28, 214);
+        AddDashboardMetric(panel, "Loaded Entries", "0", "Real item/container entries", "LoadedEntries", 274, 214);
+        AddDashboardMetric(panel, "Unsaved Edits", "0", "Generated config edits", "UnsavedEdits", 520, 214);
+        AddDashboardMetric(panel, "Last Config Save", "Never", "Updates after Save Config", "LastSave", 766, 214);
+
+        AddDashboardMetric(panel, "Last Backup", "Never", "Updates after backups", "LastBackup", 28, 316);
+        AddDashboardChart(panel, "Config Edits", "No data yet", "ConfigEditsChart", 274, 316, 218, 96);
+        AddDashboardChart(panel, "Backups Over Time", "No data yet", "BackupsChart", 520, 316, 218, 96);
+        AddDashboardChart(panel, "Status History", "No data yet", "StatusHistoryChart", 766, 316, 218, 96);
+
+        AddDashboardChart(panel, "Loaded Data Summary", "No mod data loaded yet", "LoadedSummaryChart", 28, 434, 300, 112);
+        AddDashboardChart(panel, "Server Activity Summary", "No server activity yet", "ServerActivityChart", 352, 434, 300, 112);
+
+        _dashboardActivity = new RichTextBox
+        {
+            Left = 28,
+            Top = 570,
+            Width = 948,
+            Height = 28,
+            BackColor = InnerBack,
+            ForeColor = TextMuted,
+            Font = new Font("Consolas", 9.5F, FontStyle.Regular),
+            ReadOnly = true,
+            BorderStyle = BorderStyle.None,
+            DetectUrls = false,
+            ScrollBars = RichTextBoxScrollBars.None,
+            WordWrap = false,
+            Text = "Recent activity: No data yet"
+        };
+        panel.Controls.Add(_dashboardActivity);
+        return panel;
+    }
+
+    private void AddDashboardMetric(Control parent, string title, string value, string sub, string key, int x, int y)
+    {
+        var card = NewStatCard(title, value, sub, TextMuted, x, y, 218, 86);
+        _dashboardValues[key] = (Label)card.Tag!;
+        parent.Controls.Add(card);
+    }
+
+    private void AddDashboardChart(Control parent, string title, string emptyText, string key, int x, int y, int w, int h)
+    {
+        var chart = NewPanel(12, x, y, w, h);
+        chart.Controls.Add(MakeLabel(title, 20, 12, w - 40, 24, 12, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
+        var value = MakeLabel(emptyText, 20, 46, w - 40, h - 58, 11, FontStyle.Regular, TextMuted, ContentAlignment.MiddleCenter, PanelBack);
+        chart.Controls.Add(value);
+        _dashboardValues[key] = value;
+        parent.Controls.Add(chart);
     }
 
     private RoundedPanel BuildSetupTab()
     {
+        var panel = NewPanel(12, 0, 0, 1020, 570);
+        _setupSubPages.Clear();
+        _setupSubButtons.Clear();
+
+        var x = 28;
+        foreach (var (title, width) in new[] { ("Setup", 136), ("Item Editor", 170), ("Defaults", 150) })
+        {
+            var button = NewTabButton(title, x, 18, width);
+            button.Click += (_, _) => ShowSetupSubTab(title);
+            _setupSubButtons[title] = button;
+            panel.Controls.Add(button);
+            x += width + 8;
+        }
+
+        _setupSubPages["Setup"] = BuildSetupDetailsPane();
+        _setupSubPages["Item Editor"] = BuildItemTab();
+        _setupSubPages["Defaults"] = BuildDefaultsTab();
+
+        foreach (var page in _setupSubPages.Values)
+        {
+            page.Top = 76;
+            page.Visible = false;
+            panel.Controls.Add(page);
+        }
+
+        ShowSetupSubTab("Setup");
+        return panel;
+    }
+
+    private void ShowSetupSubTab(string title)
+    {
+        foreach (var (name, page) in _setupSubPages)
+        {
+            var selected = name.Equals(title, StringComparison.Ordinal);
+            page.Visible = selected;
+            if (selected) page.BringToFront();
+        }
+
+        foreach (var (name, button) in _setupSubButtons)
+        {
+            var selected = name.Equals(title, StringComparison.Ordinal);
+            button.FillColor = selected ? Purple : InnerBack;
+            button.HoverColor = selected ? PurpleLight : Color.FromArgb(18, 31, 50);
+            button.BorderColor = selected ? PurpleLight : BorderSoft;
+            button.Invalidate();
+        }
+    }
+
+    private RoundedPanel BuildSetupDetailsPane()
+    {
         var panel = NewContentPanel();
         panel.Controls.Add(MakeLabel("Setup", 28, 24, 300, 34, 20, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
+        var readme = MakeButton("Readme", 834, 20, 126, 44, ShowReadmePopup);
+        AddTip(readme, "Open the quick setup steps without leaving the manager.");
+        panel.Controls.Add(readme);
         panel.Controls.Add(MakeLabel("Select your VEIN install and the UE4SS mod folder. The editor writes generated overrides only.", 30, 62, 760, 28, 13, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
 
         panel.Controls.Add(MakeLabel("Game folder", 30, 112, 180, 28, 13, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
@@ -565,10 +903,10 @@ public sealed partial class MainForm : Form
         helpCard.Controls.Add(MakeLabel("Tooltips", 28, 24, 180, 34, 16, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
         _toolTipsToggle = new ToggleSwitch
         {
-            Left = 768,
-            Top = 24,
-            Width = 72,
-            Height = 32,
+            Left = 790,
+            Top = 26,
+            Width = 56,
+            Height = 28,
             BackColor = PanelBack,
             Checked = true,
             OnColor = Color.FromArgb(8, 84, 54),
@@ -579,7 +917,7 @@ public sealed partial class MainForm : Form
         _toolTipsToggle.CheckedChanged += (_, _) => SetToolTipsEnabled(_toolTipsToggle.Checked);
         helpCard.Controls.Add(_toolTipsToggle);
 
-        _toolTipsStatus = MakeLabel("ON", 852, 24, 54, 32, 11, FontStyle.Bold, Green, ContentAlignment.MiddleCenter, PanelBack);
+        _toolTipsStatus = MakeLabel("ON", 858, 24, 48, 32, 11, FontStyle.Bold, Green, ContentAlignment.MiddleCenter, PanelBack);
         helpCard.Controls.Add(_toolTipsStatus);
         helpCard.Controls.Add(MakeLabel("Turn hover help on for first-time modders, or off once you know the workflow.", 30, 62, 760, 24, 12, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
         AddTip(_toolTipsToggle, "Green means tooltips are on. Red means tooltips are off.");
@@ -587,115 +925,1486 @@ public sealed partial class MainForm : Form
         return panel;
     }
 
-    private RoundedPanel BuildCategoryTab()
-    {
-        var panel = NewContentPanel();
-        panel.Controls.Add(MakeLabel("Category Defaults", 28, 24, 300, 34, 20, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
-        panel.Controls.Add(MakeLabel("Set simple defaults for a whole category. Fields change based on what the category supports.", 30, 62, 760, 28, 13, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
-
-        _categoryCombo = NewCombo(30, 112, 280, CategoryNames.Ordered);
-        _categoryCombo.SelectedIndexChanged += (_, _) => RefreshCategoryEditor();
-        AddTip(_categoryCombo, "Choose the group you want to edit. Vehicles and containers use Max Weight; item groups use item properties.");
-        panel.Controls.Add(_categoryCombo);
-
-        _categoryAdvanced = NewCheckBox("Advanced", 330, 116, 120);
-        _categoryAdvanced.CheckedChanged += (_, _) => RefreshCategoryEditor();
-        AddTip(_categoryAdvanced, "Show extra/raw information for advanced troubleshooting.");
-        panel.Controls.Add(_categoryAdvanced);
-
-        var card = NewPanel(14, 30, 150, 930, 330);
-        card.BackColor = PanelBack;
-        panel.Controls.Add(card);
-
-        card.Controls.Add(MakeLabel("Enable this category", 28, 24, 280, 34, 16, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
-        _categoryEnabled = new ToggleSwitch { Left = 324, Top = 26, Width = 84, Height = 34, BackColor = PanelBack };
-        _categoryEnabled.CheckedChanged += (_, _) => MarkUnsaved();
-        AddTip(_categoryEnabled, "Turn this whole category on or off in the generated config.");
-        card.Controls.Add(_categoryEnabled);
-
-        _categoryFields = NewFieldFlow(28, 80, 876, 198);
-        _categoryFields.AutoScroll = false;
-        card.Controls.Add(_categoryFields);
-
-        card.Controls.Add(MakeButton("Save Category Default", 28, 280, 210, 42, SaveCategoryDefault, main: true));
-        card.Controls.Add(MakeButton("Reset This Category", 258, 280, 190, 42, ResetCategory));
-
-        _categoryCombo.SelectedIndex = 0;
-        return panel;
-    }
-
     private RoundedPanel BuildItemTab()
     {
         var panel = NewContentPanel();
-        panel.Controls.Add(MakeLabel("Item Overrides", 28, 24, 300, 34, 20, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
-        panel.Controls.Add(MakeLabel("Pick one item or container and override only the values you need.", 30, 62, 760, 28, 13, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        panel.Controls.Add(MakeLabel("Item Editor", 28, 24, 300, 34, 20, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
+        panel.Controls.Add(MakeLabel("Edit one item or container, or apply a quick preset as a starting point.", 30, 62, 760, 28, 13, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
 
-        _itemCategoryCombo = NewCombo(30, 112, 220, CategoryNames.Ordered);
-        _itemCategoryCombo.SelectedIndexChanged += (_, _) => RefreshItemList();
-        AddTip(_itemCategoryCombo, "Pick the item group to search inside.");
-        panel.Controls.Add(_itemCategoryCombo);
-
-        _itemSearchBox = NewTextBox(270, 112, 230, 36);
-        _itemSearchBox.PlaceholderText = "Search item name";
-        _itemSearchBox.Font = new Font("Segoe UI", 11F, FontStyle.Regular);
-        _itemSearchBox.TextChanged += (_, _) => RefreshItemList();
-        AddTip(_itemSearchBox, "Type part of an item name or raw class name to filter the list.");
-        panel.Controls.Add(_itemSearchBox);
-
-        _itemCombo = NewCombo(520, 112, 320, Array.Empty<string>());
-        _itemCombo.SelectedIndexChanged += (_, _) => RefreshItemEditor();
-        AddTip(_itemCombo, "Pick the exact item, vehicle, backpack, or container to override.");
-        panel.Controls.Add(_itemCombo);
-
-        _itemAdvanced = NewCheckBox("Advanced", 858, 118, 120);
-        _itemAdvanced.CheckedChanged += (_, _) => RefreshItemEditor();
-        AddTip(_itemAdvanced, "Show raw Unreal class names and CDO paths for advanced users.");
-        panel.Controls.Add(_itemAdvanced);
-
-        var card = NewPanel(14, 30, 150, 930, 330);
-        card.BackColor = PanelBack;
-        panel.Controls.Add(card);
-
-        _itemClassLabel = MakeLabel("Selected item: -", 28, 24, 850, 30, 14, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack);
-        _itemCdoLabel = MakeLabel("CDO path: -", 28, 58, 850, 30, 11, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack);
-        card.Controls.Add(_itemClassLabel);
-        card.Controls.Add(_itemCdoLabel);
-
-        _itemFields = NewFieldFlow(28, 72, 876, 204);
-        _itemFields.AutoScroll = false;
-        card.Controls.Add(_itemFields);
-
-        card.Controls.Add(MakeButton("Save Item Override", 28, 280, 190, 42, SaveItemOverride, main: true));
-        card.Controls.Add(MakeButton("Clear Item Override", 238, 280, 190, 42, ClearItemOverride));
+        var itemOverridesPane = BuildItemOverridesPane();
+        itemOverridesPane.Top = 104;
+        panel.Controls.Add(itemOverridesPane);
 
         _itemCategoryCombo.SelectedIndex = 0;
         return panel;
     }
 
-    private RoundedPanel BuildPresetTab()
+    private RoundedPanel BuildDefaultsTab()
     {
         var panel = NewContentPanel();
-        panel.Controls.Add(MakeLabel("Presets", 28, 24, 300, 34, 20, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
-        panel.Controls.Add(MakeLabel("Use presets as quick starting points, then fine tune categories or individual items.", 30, 62, 760, 28, 13, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        panel.Controls.Add(MakeLabel("Defaults", 28, 24, 300, 34, 20, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
+        panel.Controls.Add(MakeLabel("Set simple defaults for a whole category. Fields change based on what the category supports.", 30, 62, 760, 28, 13, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
 
-        (string Title, string Description, Action Apply)[] presets =
+        var defaultsPane = BuildDefaultsPane();
+        defaultsPane.Top = 104;
+        panel.Controls.Add(defaultsPane);
+
+        _categoryCombo.SelectedIndex = 0;
+        return panel;
+    }
+
+    private RoundedPanel BuildDefaultsPane()
+    {
+        var pane = NewPanel(12, 30, 158, 930, 382);
+        pane.BackColor = PanelBack;
+
+        _categoryCombo = NewCombo(28, 24, 280, CategoryNames.Ordered);
+        _categoryCombo.SelectedIndexChanged += (_, _) => RefreshCategoryEditor();
+        AddTip(_categoryCombo, "Choose the group you want to edit. Vehicles and containers use Max Weight; item groups use item properties.");
+        pane.Controls.Add(_categoryCombo);
+
+        var card = NewPanel(14, 28, 76, 874, 270);
+        card.BackColor = PanelBack;
+        pane.Controls.Add(card);
+
+        card.Controls.Add(MakeLabel("Enable this category", 28, 20, 280, 34, 16, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
+        _categoryEnabled = new ToggleSwitch { Left = 324, Top = 22, Width = 84, Height = 34, BackColor = PanelBack };
+        _categoryEnabled.CheckedChanged += (_, _) => MarkUnsaved();
+        AddTip(_categoryEnabled, "Turn this whole category on or off in the generated config.");
+        card.Controls.Add(_categoryEnabled);
+
+        _categoryFields = NewFieldFlow(28, 72, 818, 128);
+        _categoryFields.AutoScroll = true;
+        card.Controls.Add(_categoryFields);
+
+        card.Controls.Add(MakeButton("Save Category Default", 28, 216, 210, 42, SaveCategoryDefault, main: true));
+        card.Controls.Add(MakeButton("Reset This Category", 258, 216, 190, 42, ResetCategory));
+        var resetAll = MakeButton("Reset All Defaults", 468, 216, 190, 42, PresetResetToDefaults);
+        AddTip(resetAll, "Clear all generated category defaults, item overrides, and container/vehicle overrides.");
+        card.Controls.Add(resetAll);
+
+        return pane;
+    }
+
+    private RoundedPanel BuildItemOverridesPane()
+    {
+        var pane = NewPanel(12, 30, 158, 930, 382);
+        pane.BackColor = PanelBack;
+
+        _itemCategoryCombo = NewCombo(28, 24, 220, CategoryNames.Ordered);
+        _itemCategoryCombo.SelectedIndexChanged += (_, _) => RefreshItemList();
+        AddTip(_itemCategoryCombo, "Pick the item group to search inside.");
+        pane.Controls.Add(_itemCategoryCombo);
+
+        var itemSearchBox = NewTextBox(268, 24, 230, 36);
+        itemSearchBox.CenteredPlaceholderText = "Search item name";
+        itemSearchBox.TextAlign = HorizontalAlignment.Center;
+        itemSearchBox.Font = new Font("Segoe UI", 11F, FontStyle.Regular);
+        _itemSearchBox = itemSearchBox;
+        _itemSearchBox.TextChanged += (_, _) => RefreshItemList();
+        AddTip(_itemSearchBox, "Type part of an item name or raw class name to filter the list.");
+        pane.Controls.Add(_itemSearchBox);
+
+        _itemCombo = NewCombo(520, 24, 280, Array.Empty<string>());
+        _itemCombo.SelectedIndexChanged += (_, _) => RefreshItemEditor();
+        AddTip(_itemCombo, "Pick the exact item, vehicle, backpack, or container to override.");
+        pane.Controls.Add(_itemCombo);
+
+        _itemAdvanced = NewCheckBox("Advanced", 812, 30, 112);
+        _itemAdvanced.CheckedChanged += (_, _) => RefreshItemEditor();
+        AddTip(_itemAdvanced, "Show raw Unreal class names and CDO paths for advanced users.");
+        pane.Controls.Add(_itemAdvanced);
+
+        var card = NewPanel(14, 28, 76, 874, 270);
+        card.BackColor = PanelBack;
+        pane.Controls.Add(card);
+
+        _itemClassLabel = MakeLabel("Selected item: -", 28, 20, 820, 30, 14, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack);
+        _itemCdoLabel = MakeLabel("CDO path: -", 28, 58, 850, 30, 11, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack);
+        card.Controls.Add(_itemClassLabel);
+        card.Controls.Add(_itemCdoLabel);
+
+        _itemFields = NewFieldFlow(28, 64, 818, 144);
+        _itemFields.AutoScroll = false;
+        card.Controls.Add(_itemFields);
+
+        card.Controls.Add(MakeButton("Save Item Override", 28, 216, 190, 42, SaveItemOverride, main: true));
+        card.Controls.Add(MakeButton("Clear Item Override", 238, 216, 190, 42, ClearItemOverride));
+
+        return pane;
+    }
+
+    private RoundedPanel BuildServerManagerTab()
+    {
+        var panel = NewContentPanel();
+        _serverSubPages.Clear();
+        _serverSubButtons.Clear();
+
+        panel.Controls.Add(MakeLabel("Server Manager", 28, 24, 360, 34, 20, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
+        panel.Controls.Add(MakeLabel("Manage VEIN server setup, config backups, mod parity, logs, and helper packages.", 30, 62, 720, 28, 13, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        _serverTypeLabel = MakeLabel("Server Type", 594, 28, 110, 28, 12, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack);
+        _serverTypeLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        panel.Controls.Add(_serverTypeLabel);
+
+        _serverTypeCombo = NewCombo(704, 24, 310, new[] { "Windows Server Setup", "Linux Server Setup" });
+        _serverTypeCombo.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        _serverTypeCombo.SelectedIndexChanged += (_, _) => UpdateServerTypeUi();
+        AddTip(_serverTypeCombo, "Choose whether you are configuring a local Windows server or a remote Linux server.");
+        panel.Controls.Add(_serverTypeCombo);
+
+        _serverTabFlow = new FlowLayoutPanel
         {
-            ("Lightweight Items", "Set normal item category weight defaults to 0.1.", PresetLightweightItems),
-            ("Big Stacks", "Set normal item categories to stack up to 999.", PresetBigStacks),
-            ("Huge Containers", "Set container Max Weight to 999999.", PresetHugeContainers),
-            ("Huge Vehicles", "Set vehicle Max Weight to 999999.", PresetHugeVehicles),
-            ("Backpacks Boosted", "Set backpacks Extra Weight Capacity to 999999.", PresetBackpacksBoosted),
-            ("Reset To Game Defaults", "Clear generated UI defaults and overrides.", PresetResetToDefaults)
+            Left = 28,
+            Top = 104,
+            Width = 964,
+            Height = 92,
+            BackColor = PanelBack,
+            AutoScroll = false,
+            WrapContents = true
         };
+        _serverTabFlow.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        panel.Controls.Add(_serverTabFlow);
 
-        for (var i = 0; i < presets.Length; i++)
+        foreach (var (title, width) in new[]
+                 {
+                     ("Connection / Config", 180),
+                     ("Actions", 110),
+                     ("Backups", 110),
+                     ("Mod Parity", 130),
+                     ("Logs", 90),
+                     ("Linux Helper", 140)
+                 })
         {
-            var x = 30 + (i % 2) * 465;
-            var y = 118 + (i / 2) * 112;
-            panel.Controls.Add(NewPresetCard(presets[i].Title, presets[i].Description, x, y, presets[i].Apply));
+            var button = NewTabButton(title, 0, 0, width);
+            button.Margin = new Padding(0, 0, 8, 8);
+            button.Click += (_, _) => ShowServerSubTab(title);
+            _serverSubButtons[title] = button;
+            _serverTabFlow.Controls.Add(button);
         }
 
+        _serverSubPages["Connection / Config"] = BuildServerMainSettingsPage();
+        _serverSubPages["Actions"] = BuildServerManagementPage();
+        _serverSubPages["Backups"] = BuildServerBackupsPage();
+        _serverSubPages["Mod Parity"] = BuildModParityPage();
+        _serverSubPages["Logs"] = BuildServerLogsPage();
+        _serverSubPages["Linux Helper"] = BuildServerIntegrationsPage();
+
+        foreach (var page in _serverSubPages.Values)
+        {
+            page.Left = 28;
+            page.Top = 204;
+            page.Width = 964;
+            page.Height = 300;
+            page.Visible = false;
+            page.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            panel.Controls.Add(page);
+        }
+
+        ShowServerSubTab("Connection / Config");
+        UpdateServerTypeUi();
+        LogServer("Server Manager ready. Pick Windows or Linux setup.");
         return panel;
+    }
+
+    private void ShowServerSubTab(string title)
+    {
+        foreach (var (name, page) in _serverSubPages)
+        {
+            var selected = name.Equals(title, StringComparison.Ordinal);
+            page.Visible = selected;
+            if (selected) page.BringToFront();
+        }
+
+        foreach (var (name, button) in _serverSubButtons)
+        {
+            var selected = name.Equals(title, StringComparison.Ordinal);
+            button.FillColor = selected ? Purple : InnerBack;
+            button.HoverColor = selected ? PurpleLight : Color.FromArgb(18, 31, 50);
+            button.BorderColor = selected ? PurpleLight : BorderSoft;
+            button.Invalidate();
+        }
+
+        _serverTabFlow?.PerformLayout();
+        _serverTabFlow?.Invalidate(true);
+    }
+
+    private Panel BuildServerMainSettingsPage()
+    {
+        var page = new Panel
+        {
+            BackColor = PanelBack,
+            AutoScroll = true,
+            AutoScrollMargin = new Size(0, 18)
+        };
+        _serverModePanel = new Panel
+        {
+            Left = 0,
+            Top = 0,
+            Width = 944,
+            Height = 300,
+            BackColor = PanelBack,
+            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+        };
+        page.Controls.Add(_serverModePanel);
+
+        _windowsServerPanel = BuildWindowsServerPanel();
+        _linuxServerPanel = BuildLinuxServerPanel();
+        _serverModePanel.Controls.Add(_windowsServerPanel);
+        _serverModePanel.Controls.Add(_linuxServerPanel);
+        return page;
+    }
+
+    private Panel BuildServerManagementPage()
+    {
+        var page = new Panel { BackColor = PanelBack };
+        _serverManagementPane = page;
+
+        var windows = NewServerSection("Windows Server Management", 0, 0, 456, 200);
+        _windowsServerActionsPanel = windows;
+        page.Controls.Add(windows);
+        windows.Controls.Add(MakeButton("Save Server Config", 22, 46, 180, 42, SaveWindowsServerConfig, main: true));
+        windows.Controls.Add(MakeButton("Validate or Update Server", 222, 46, 190, 42, ValidateOrUpdateWindowsServer));
+        windows.Controls.Add(MakeButton("Start Server", 22, 106, 122, 42, StartWindowsServerFromUi));
+        windows.Controls.Add(MakeButton("Stop Server", 154, 106, 122, 42, StopWindowsServer));
+        windows.Controls.Add(MakeButton("Restart Server", 286, 106, 122, 42, RestartWindowsServerFromUi));
+        windows.Controls.Add(MakeButton("Open Server Folder", 22, 154, 180, 36, OpenSelectedServerFolder));
+        windows.Controls.Add(MakeButton("View Logs", 222, 154, 160, 36, OpenSelectedServerLogs));
+
+        var linux = NewServerSection("Linux Server Management", 476, 0, 456, 260);
+        _linuxServerActionsPanel = linux;
+        page.Controls.Add(linux);
+        linux.Controls.Add(MakeButton("Test Connection", 22, 46, 180, 42, TestLinuxConnectionFromUi, main: true));
+        linux.Controls.Add(MakeButton("Save Connection Profile", 222, 46, 190, 42, SaveLinuxProfileFromUi));
+        linux.Controls.Add(MakeButton("Download Remote Config", 22, 106, 180, 42, DownloadRemoteConfigFromUi));
+        linux.Controls.Add(MakeButton("Upload Config To Server", 222, 106, 190, 42, UploadRemoteConfigFromUi));
+        linux.Controls.Add(MakeButton("Backup Remote Server", 22, 166, 180, 42, BackupRemoteServerFromUi));
+        linux.Controls.Add(MakeButton("Restart Linux Server", 222, 166, 190, 42, RestartLinuxServerFromUi));
+        linux.Controls.Add(MakeButton("View Remote Logs", 22, 218, 180, 36, ViewRemoteLogsFromUi));
+        return page;
+    }
+
+    private Panel BuildServerBackupsPage()
+    {
+        var page = new Panel { BackColor = PanelBack };
+        _serverBackupsPane = page;
+        var section = NewServerSection("Backups", 0, 0, 456, 244);
+        page.Controls.Add(section);
+        section.Controls.Add(MakeButton("Backup now", 22, 46, 140, 42, BackupSelectedServerConfig, main: true));
+        _backupBeforeSaveToggle = AddToggleRow(section, "Backup before save", 190, 46, isChecked: true);
+        _backupBeforeUploadToggle = AddToggleRow(section, "Backup before upload", 190, 86, isChecked: true);
+        _backupBeforeRestartToggle = AddToggleRow(section, "Backup before restart", 190, 126, isChecked: true);
+        _recentBackupsList = new ListBox
+        {
+            Left = 22,
+            Top = 104,
+            Width = 140,
+            Height = 72,
+            BackColor = InnerBack,
+            ForeColor = TextMuted,
+            BorderStyle = BorderStyle.None,
+            Font = new Font("Consolas", 9F, FontStyle.Regular)
+        };
+        _recentBackupsList.Items.Add("No backups yet");
+        section.Controls.Add(_recentBackupsList);
+        var restore = NewSmallButton("Restore backup", 22, 188, 140, 32);
+        restore.Enabled = false;
+        AddTip(restore, "Disabled until restore can be implemented with validation and rollback checks.");
+        section.Controls.Add(restore);
+        return page;
+    }
+
+    private Panel BuildModParityPage()
+    {
+        var page = new Panel
+        {
+            BackColor = PanelBack,
+            AutoScroll = true,
+            AutoScrollMargin = new Size(0, 18)
+        };
+
+        var approved = NewServerSection("Approved Mod List", 0, 0, 456, 286);
+        page.Controls.Add(approved);
+        approved.Controls.Add(MakeLabel("Add every UE4SS mod folder players must match.", 22, 34, 390, 24, 10.5F, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+
+        _modParityList = new ListBox
+        {
+            Left = 22,
+            Top = 68,
+            Width = 410,
+            Height = 132,
+            BackColor = InnerBack,
+            ForeColor = TextMuted,
+            BorderStyle = BorderStyle.None,
+            Font = new Font("Consolas", 9.5F, FontStyle.Regular),
+            HorizontalScrollbar = true
+        };
+        approved.Controls.Add(_modParityList);
+
+        approved.Controls.Add(MakeButton("Add Mod Folder", 22, 216, 150, 42, AddModParityFolder, main: true));
+        approved.Controls.Add(MakeButton("Remove Selected", 188, 216, 150, 42, RemoveSelectedModParityFolder));
+
+        var settings = NewServerSection("Parity Settings", 476, 0, 456, 286);
+        page.Controls.Add(settings);
+        _modParityAllowExtraMods = NewCheckBox("Allow extra client mods", 22, 44, 210);
+        settings.Controls.Add(_modParityAllowExtraMods);
+
+        settings.Controls.Add(MakeLabel("Enforcement", 22, 88, 160, 24, 10.5F, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        _modParityEnforcementCombo = NewCombo(22, 114, 190, new[] { "Log Only", "Off" });
+        settings.Controls.Add(_modParityEnforcementCombo);
+
+        settings.Controls.Add(MakeLabel("Kick message", 22, 164, 180, 24, 10.5F, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        _modParityKickMessageBox = NewTextBox(22, 190, 410, 34);
+        _modParityKickMessageBox.Text = "This server requires the approved modpack.";
+        settings.Controls.Add(_modParityKickMessageBox);
+
+        AddTip(_modParityAllowExtraMods, "When off, clients with unapproved extra mods fail the parity check.");
+        AddTip(_modParityEnforcementCombo, "Runtime kick enforcement is hidden until the server-authoritative handshake is verified.");
+        AddTip(_modParityKickMessageBox, "Message to show when a future runtime kick rejects a mismatched client.");
+
+        var actions = NewServerSection("Generate / Install", 0, 306, 932, 148);
+        actions.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        page.Controls.Add(actions);
+        actions.Controls.Add(MakeButton("Generate Manifest", 22, 46, 170, 42, GenerateModParityManifest, main: true));
+        actions.Controls.Add(MakeButton("Export Package", 212, 46, 150, 42, ExportModParityPackage));
+        actions.Controls.Add(MakeButton("Install Server Mod", 382, 46, 170, 42, InstallWindowsModParityServer));
+        actions.Controls.Add(MakeButton("Open Package Folder", 572, 46, 180, 42, OpenModParityPackageFolder));
+
+        _modParityStatusLabel = MakeWrappedLabel(
+            "Phase 1 builds approved per-file manifests and installs/export templates. Runtime handshake and kick enforcement still need in-game UE4SS testing.",
+            22,
+            98,
+            860,
+            40,
+            10.5F,
+            FontStyle.Regular,
+            TextMuted,
+            PanelBack);
+        actions.Controls.Add(_modParityStatusLabel);
+
+        return page;
+    }
+
+    private Panel BuildServerLogsPage()
+    {
+        var page = new Panel { BackColor = PanelBack };
+        _serverLogsPane = page;
+        var section = NewServerSection("Logs", 0, 0, 932, 286);
+        section.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        page.Controls.Add(section);
+        section.Controls.Add(MakeButton("Refresh Logs", 22, 42, 140, 38, () => LogServer("Server Manager log refreshed.")));
+        section.Controls.Add(MakeButton("Clear Logs", 180, 42, 120, 38, () => _serverManagerLog.Clear()));
+        section.Controls.Add(MakeLabel("Auto-scroll", 332, 48, 90, 24, 10.5F, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        _serverLogAutoScrollToggle = new ToggleSwitch { Left = 424, Top = 48, Width = 56, Height = 28, BackColor = PanelBack, Checked = true };
+        section.Controls.Add(_serverLogAutoScrollToggle);
+
+        _serverManagerLog = new RichTextBox
+        {
+            Left = 22,
+            Top = 92,
+            Width = 886,
+            Height = 164,
+            BackColor = InnerBack,
+            ForeColor = TextMuted,
+            Font = new Font("Consolas", 10F, FontStyle.Regular),
+            ReadOnly = true,
+            BorderStyle = BorderStyle.None,
+            DetectUrls = false,
+            ScrollBars = RichTextBoxScrollBars.Vertical,
+            WordWrap = true,
+            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+        };
+        section.Controls.Add(_serverManagerLog);
+        return page;
+    }
+
+    private Panel BuildServerIntegrationsPage()
+    {
+        var page = new Panel { BackColor = PanelBack };
+        _serverIntegrationsPane = page;
+        _linuxHelperPanel = BuildLinuxHelperSection();
+        _linuxHelperPanel.Left = 0;
+        _linuxHelperPanel.Top = 0;
+        page.Controls.Add(_linuxHelperPanel);
+        page.Controls.Add(MakeLabel("Linux Helper is available only when Linux Server Setup is selected.", 22, 188, 720, 28, 12F, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        return page;
+    }
+
+    private static Panel BuildServerPlaceholderPage(string title, string message)
+    {
+        var page = new Panel { BackColor = PanelBack };
+        var section = NewServerSection(title, 0, 0, 520, 150);
+        section.Controls.Add(MakeLabel(message, 22, 56, 460, 42, 12F, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        page.Controls.Add(section);
+        return page;
+    }
+
+    private void BuildServerStatusSection(Control parent)
+    {
+        var cardWidth = 214;
+        var gap = 14;
+        var server = NewStatCard("Server Status", "Stopped", "Local/remote process", Orange, 0, 0, cardWidth, 76);
+        var config = NewStatCard("Config Status", "Not Saved", "No server config write", Orange, cardWidth + gap, 0, cardWidth, 76);
+        var connection = NewStatCard("Connection Status", "Not Connected", "Test required", Orange, (cardWidth + gap) * 2, 0, cardWidth, 76);
+        var backup = NewStatCard("Last Backup", "None", "Backup before changes", TextMuted, (cardWidth + gap) * 3, 0, cardWidth, 76);
+        _serverStatusValue = (Label)server.Tag!;
+        _configStatusValue = (Label)config.Tag!;
+        _connectionStatusValue = (Label)connection.Tag!;
+        _lastBackupValue = (Label)backup.Tag!;
+        parent.Controls.Add(server);
+        parent.Controls.Add(config);
+        parent.Controls.Add(connection);
+        parent.Controls.Add(backup);
+    }
+
+    private Panel BuildWindowsServerPanel()
+    {
+        var panel = new Panel { Left = 0, Top = 0, Width = 930, Height = 300, BackColor = PanelBack };
+        var connection = NewServerSection("Connection", 0, 0, 456, 142);
+        panel.Controls.Add(connection);
+
+        var serverFolder = AddPathField(connection, "Server folder path", 22, 50, 284, "Browse Folder", browseFolder: true);
+        _windowsServerFolderBox = serverFolder.Box;
+        var steamCmd = AddPathField(connection, "SteamCMD path", 22, 104, 284, "SteamCMD", browseFolder: false);
+        _windowsSteamCmdBox = steamCmd.Box;
+        AddTip(serverFolder.Box, "Folder containing the dedicated VEIN server files.");
+        AddTip(steamCmd.Box, "Path to steamcmd.exe for validate/update workflows.");
+
+        var config = NewServerSection("Server Config", 476, 0, 456, 300);
+        panel.Controls.Add(config);
+        var serverName = AddCompactTextField(config, "Server name", 22, 58, 184, "VEIN Server");
+        var description = AddCompactTextField(config, "Server description", 226, 58, 184, "");
+        var sessionName = AddCompactTextField(config, "Session name", 22, 110, 184, "Server");
+        var serverPassword = AddCompactTextField(config, "Server password", 226, 110, 184, "", password: true);
+        var mapSelection = AddCompactTextField(config, "Map selection", 22, 162, 250, "/Game/Vein/Maps/ChamplainValley?listen");
+        var maxPlayers = AddCompactTextField(config, "Max players", 292, 162, 118, "16");
+        var gamePort = AddCompactTextField(config, "Game port", 22, 214, 118, "7779");
+        var queryPort = AddCompactTextField(config, "Query port", 160, 214, 118, "27015");
+        config.Controls.Add(MakeLabel("Super Admin SteamIDs", 22, 246, 388, 20, 10.5F, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        var superAdmins = NewTextBox(22, 268, 388, 30);
+        config.Controls.Add(superAdmins);
+        _windowsServerNameBox = serverName;
+        _windowsDescriptionBox = description;
+        _windowsSessionNameBox = sessionName;
+        _windowsServerPasswordBox = serverPassword;
+        _windowsMapSelectionBox = mapSelection;
+        _windowsMaxPlayersBox = maxPlayers;
+        _windowsGamePortBox = gamePort;
+        _windowsQueryPortBox = queryPort;
+        _windowsSuperAdminsBox = superAdmins;
+
+        var network = NewServerSection("Network Options", 0, 158, 456, 142);
+        panel.Controls.Add(network);
+        var enableRcon = AddToggleRow(network, "Enable RCON", 22, 50);
+        network.Controls.Add(MakeLabel("RCON port", 250, 26, 90, 22, 10.5F, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        var rconPort = NewTextBox(250, 50, 80, 34);
+        rconPort.Text = "27020";
+        network.Controls.Add(rconPort);
+        network.Controls.Add(MakeLabel("Password", 342, 26, 90, 22, 10.5F, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        var rconPassword = NewTextBox(342, 50, 90, 34, password: true);
+        network.Controls.Add(rconPassword);
+        var enableHttpApi = AddToggleRow(network, "Enable HTTP API", 22, 104);
+        network.Controls.Add(MakeLabel("HTTP API port", 250, 80, 130, 22, 10.5F, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        var httpApiPort = NewTextBox(250, 104, 120, 34);
+        httpApiPort.Text = "8080";
+        network.Controls.Add(httpApiPort);
+        _windowsEnableRconToggle = enableRcon;
+        _windowsRconPortBox = rconPort;
+        _windowsRconPasswordBox = rconPassword;
+        _windowsEnableHttpApiToggle = enableHttpApi;
+        _windowsHttpApiPortBox = httpApiPort;
+        return panel;
+    }
+
+    private Panel BuildLinuxServerPanel()
+    {
+        var panel = new Panel { Left = 0, Top = 0, Width = 930, Height = 300, BackColor = PanelBack };
+        var connection = NewServerSection("Connection", 0, 0, 456, 300);
+        panel.Controls.Add(connection);
+        var host = AddTextField(connection, "Server host or IP", 22, 54, 184, "");
+        var port = AddTextField(connection, "SSH port", 226, 54, 84, "22");
+        var username = AddTextField(connection, "SSH username", 22, 112, 184, "root");
+        connection.Controls.Add(MakeLabel("Authentication type", 226, 88, 184, 22, 10.5F, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        var authType = NewCombo(226, 112, 184, new[] { "SSH Key", "Password" });
+        connection.Controls.Add(authType);
+        var sshKey = AddPathField(connection, "SSH key path", 22, 194, 270, "Browse SSH Key", browseFolder: false);
+        var passwordLabel = MakeLabel("Password", 22, 222, 184, 22, 10.5F, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack);
+        var password = NewTextBox(22, 246, 184, 34, password: true);
+        connection.Controls.Add(passwordLabel);
+        connection.Controls.Add(password);
+        passwordLabel.Visible = false;
+        password.Visible = false;
+        authType.SelectedIndexChanged += (_, _) =>
+        {
+            var passwordAuth = Convert.ToString(authType.SelectedItem)?.Equals("Password", StringComparison.OrdinalIgnoreCase) == true;
+            passwordLabel.Visible = passwordAuth;
+            password.Visible = passwordAuth;
+            sshKey.Label.Visible = !passwordAuth;
+            sshKey.Box.Visible = !passwordAuth;
+            sshKey.Button.Visible = !passwordAuth;
+        };
+
+        var paths = NewServerSection("Remote Paths", 476, 0, 456, 190);
+        panel.Controls.Add(paths);
+        var remoteServerPath = AddTextField(paths, "Remote VEIN server path", 22, 54, 388, "/home/steam/vein-server");
+        var remoteConfigPath = AddTextField(paths, "Remote config path", 22, 112, 388, "/home/steam/vein-server/Vein/Saved/Config/LinuxServer/Game.ini");
+        _linuxHostBox = host;
+        _linuxPortBox = port;
+        _linuxUsernameBox = username;
+        _linuxAuthTypeCombo = authType;
+        _linuxSshKeyBox = sshKey.Box;
+        _linuxPasswordBox = password;
+        _linuxRemoteServerPathBox = remoteServerPath;
+        _linuxRemoteConfigPathBox = remoteConfigPath;
+        foreach (var box in new[]
+                 {
+                     _linuxHostBox,
+                     _linuxPortBox,
+                     _linuxUsernameBox,
+                     _linuxSshKeyBox,
+                     _linuxPasswordBox,
+                     _linuxRemoteServerPathBox,
+                     _linuxRemoteConfigPathBox
+                 })
+        {
+            box.TextChanged += ResetLinuxConnectionTrust;
+        }
+
+        _linuxAuthTypeCombo.SelectedIndexChanged += ResetLinuxConnectionTrust;
+        return panel;
+    }
+
+    private RoundedPanel BuildServerActionsSection()
+    {
+        var section = NewServerSection("Actions", 0, 610, 448, 118);
+        section.Controls.Add(MakeButton("Open Server Folder", 22, 46, 180, 42, OpenSelectedServerFolder));
+        section.Controls.Add(MakeButton("View Logs", 222, 46, 160, 42, OpenSelectedServerLogs));
+        return section;
+    }
+
+    private RoundedPanel BuildServerBackupsSection()
+    {
+        var section = NewServerSection("Backups", 466, 610, 448, 188);
+        section.Controls.Add(MakeButton("Backup now", 22, 42, 130, 38, BackupSelectedServerConfig, main: true));
+        _backupBeforeSaveToggle = AddToggleRow(section, "Backup before save", 180, 42, isChecked: true);
+        _backupBeforeUploadToggle = AddToggleRow(section, "Backup before upload", 180, 80, isChecked: true);
+        _backupBeforeRestartToggle = AddToggleRow(section, "Backup before restart", 180, 118, isChecked: true);
+        _recentBackupsList = new ListBox
+        {
+            Left = 22,
+            Top = 92,
+            Width = 130,
+            Height = 54,
+            BackColor = InnerBack,
+            ForeColor = TextMuted,
+            BorderStyle = BorderStyle.None,
+            Font = new Font("Consolas", 9F, FontStyle.Regular)
+        };
+        _recentBackupsList.Items.Add("No backups yet");
+        section.Controls.Add(_recentBackupsList);
+        var restore = NewSmallButton("Restore backup", 22, 150, 130, 30);
+        restore.Enabled = false;
+        AddTip(restore, "Disabled until restore can be implemented with validation and rollback checks.");
+        section.Controls.Add(restore);
+        return section;
+    }
+
+    private RoundedPanel BuildServerLogsSection()
+    {
+        var section = NewServerSection("Logs", 0, 814, 914, 220);
+        section.Controls.Add(MakeButton("Refresh Logs", 22, 42, 140, 38, () => LogServer("Server Manager log refreshed.")));
+        section.Controls.Add(MakeButton("Clear Logs", 180, 42, 120, 38, () => _serverManagerLog.Clear()));
+        section.Controls.Add(MakeLabel("Auto-scroll", 332, 48, 90, 24, 10.5F, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        _serverLogAutoScrollToggle = new ToggleSwitch { Left = 424, Top = 48, Width = 56, Height = 28, BackColor = PanelBack, Checked = true };
+        section.Controls.Add(_serverLogAutoScrollToggle);
+
+        _serverManagerLog = new RichTextBox
+        {
+            Left = 22,
+            Top = 92,
+            Width = 866,
+            Height = 102,
+            BackColor = InnerBack,
+            ForeColor = TextMuted,
+            Font = new Font("Consolas", 10F, FontStyle.Regular),
+            ReadOnly = true,
+            BorderStyle = BorderStyle.None,
+            DetectUrls = false,
+            ScrollBars = RichTextBoxScrollBars.Vertical,
+            WordWrap = true
+        };
+        section.Controls.Add(_serverManagerLog);
+        return section;
+    }
+
+    private RoundedPanel BuildLinuxHelperSection()
+    {
+        var section = NewServerSection("Linux Helper", 0, 1050, 914, 168);
+        section.Controls.Add(MakeLabel("Generate a private helper package for your Linux server. It backs up before writes and exposes no public API.", 22, 38, 820, 26, 11F, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        section.Controls.Add(MakeButton("Generate Linux Helper", 22, 82, 190, 42, () =>
+        {
+            try
+            {
+                var package = ServerManagerService.GenerateLinuxHelperPackage();
+                _lastLinuxHelperZip = package.ZipPath;
+                LogServer("Generated Linux helper package: " + package.ZipPath);
+            }
+            catch (Exception ex)
+            {
+                SetServerManagerError("Helper generation failed: " + ex.Message);
+            }
+        }, main: true));
+        section.Controls.Add(MakeButton("Download Helper Package", 232, 82, 200, 42, () =>
+        {
+            if (string.IsNullOrWhiteSpace(_lastLinuxHelperZip) || !File.Exists(_lastLinuxHelperZip))
+            {
+                SetServerManagerError("Generate the Linux helper package first.");
+                return;
+            }
+            Process.Start(new ProcessStartInfo { FileName = Path.GetDirectoryName(_lastLinuxHelperZip)!, UseShellExecute = true });
+            LogServer("Opened helper package folder.");
+        }));
+        section.Controls.Add(MakeButton("Copy Install Command", 452, 82, 190, 42, () =>
+        {
+            Clipboard.SetText("unzip vein-linux-helper-*.zip && cd vein-linux-helper-* && chmod +x install.sh && ./install.sh");
+            LogServer("Copied Linux helper install command.");
+        }));
+        section.Controls.Add(MakeButton("Verify Helper Installed", 662, 82, 190, 42, () =>
+        {
+            if (!RequireLinuxConnection("Verify Helper Installed")) return;
+
+            try
+            {
+                var profile = BuildLinuxProfileFromUi();
+                var result = ServerManagerService.RunLinuxHelperCommand(profile, "status");
+                result.ThrowIfFailed("Helper verification failed.");
+                SetServerStatus(result.Output.Trim(), Green);
+                LogServer("Linux helper verified. Server status: " + result.Output.Trim());
+            }
+            catch (Exception ex)
+            {
+                SetServerManagerError(ex.Message);
+            }
+        }));
+        return section;
+    }
+
+    private void UpdateServerTypeUi()
+    {
+        if (_serverTypeCombo == null || _windowsServerPanel == null || _linuxServerPanel == null) return;
+
+        var linux = Convert.ToString(_serverTypeCombo.SelectedItem)?.Equals("Linux Server Setup", StringComparison.OrdinalIgnoreCase) == true;
+        _windowsServerPanel.Visible = !linux;
+        _linuxServerPanel.Visible = linux;
+        _windowsServerActionsPanel.Visible = !linux;
+        _linuxServerActionsPanel.Visible = linux;
+        _linuxServerActionsPanel.Left = linux ? 0 : 476;
+        _linuxHelperPanel.Visible = linux;
+        if (_serverSubButtons.TryGetValue("Linux Helper", out var linuxHelperButton))
+        {
+            linuxHelperButton.Visible = linux;
+        }
+
+        if (!linux
+            && _serverSubPages.TryGetValue("Linux Helper", out var linuxHelperPage)
+            && linuxHelperPage.Visible)
+        {
+            ShowServerSubTab("Connection / Config");
+        }
+
+        _serverTabFlow.PerformLayout();
+        _serverTabFlow.Invalidate(true);
+
+        _linuxConnectionTested = false;
+        SetConnectionStatus(linux ? "Not Connected" : "Local", linux ? Orange : Green);
+        SetServerStatus("Stopped", Orange);
+        LogServer(linux ? "Linux Server Setup selected." : "Windows Server Setup selected.");
+    }
+
+    private static RoundedPanel NewServerSection(string title, int x, int y, int w, int h)
+    {
+        var section = NewPanel(12, x, y, w, h);
+        section.BackColor = PanelBack;
+        section.Controls.Add(MakeLabel(title, 22, 8, w - 44, 22, 13F, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
+        return section;
+    }
+
+    private static (Label Label, ThemedTextBox Box, RoundedButton Button) AddPathField(Control parent, string label, int x, int y, int width, string buttonText, bool browseFolder)
+    {
+        var fieldLabel = MakeLabel(label, x, y - 24, width, 22, 10.5F, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack);
+        var box = NewTextBox(x, y, width, 34);
+        var button = NewSmallButton(buttonText, x + width + 12, y - 2, 126, 38);
+        button.Click += (_, _) =>
+        {
+            if (browseFolder)
+            {
+                using var dialog = new FolderBrowserDialog { Description = label };
+                if (dialog.ShowDialog() == DialogResult.OK) box.Text = dialog.SelectedPath;
+                return;
+            }
+
+            using var fileDialog = new OpenFileDialog { Title = label, CheckFileExists = true };
+            if (fileDialog.ShowDialog() == DialogResult.OK) box.Text = fileDialog.FileName;
+        };
+        parent.Controls.Add(fieldLabel);
+        parent.Controls.Add(box);
+        parent.Controls.Add(button);
+        return (fieldLabel, box, button);
+    }
+
+    private static ThemedTextBox AddTextField(Control parent, string label, int x, int y, int width, string value, bool password = false)
+    {
+        parent.Controls.Add(MakeLabel(label, x, y - 24, width, 22, 10.5F, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        var box = NewTextBox(x, y, width, 34, password);
+        box.Text = value;
+        parent.Controls.Add(box);
+        return box;
+    }
+
+    private static ThemedTextBox AddCompactTextField(Control parent, string label, int x, int y, int width, string value, bool password = false)
+    {
+        parent.Controls.Add(MakeLabel(label, x, y - 22, width, 20, 10F, FontStyle.Bold, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        var box = NewTextBox(x, y, width, 30, password);
+        box.Text = value;
+        parent.Controls.Add(box);
+        return box;
+    }
+
+    private static ToggleSwitch AddToggleRow(Control parent, string label, int x, int y, bool isChecked = false)
+    {
+        var toggle = new ToggleSwitch
+        {
+            Left = x,
+            Top = y,
+            Width = 56,
+            Height = 28,
+            BackColor = PanelBack,
+            Checked = isChecked,
+            OnColor = Color.FromArgb(8, 84, 54),
+            OnColor2 = Color.FromArgb(10, 135, 82),
+            OffColor = Color.FromArgb(82, 20, 28),
+            OffColor2 = Color.FromArgb(122, 32, 42)
+        };
+        parent.Controls.Add(toggle);
+        parent.Controls.Add(MakeLabel(label, x + 68, y, 160, 28, 10.5F, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        return toggle;
+    }
+
+    private static WindowsServerProfile BuildWindowsProfile(
+        TextBox serverFolder,
+        TextBox steamCmd,
+        TextBox serverName,
+        TextBox description,
+        TextBox sessionName,
+        TextBox serverPassword,
+        TextBox mapSelection,
+        TextBox gamePort,
+        TextBox queryPort,
+        TextBox maxPlayers,
+        ToggleSwitch enableRcon,
+        TextBox rconPort,
+        TextBox rconPassword,
+        ToggleSwitch enableHttpApi,
+        TextBox httpApiPort,
+        TextBox superAdmins)
+    {
+        return new WindowsServerProfile(
+            serverFolder.Text.Trim(),
+            steamCmd.Text.Trim(),
+            serverName.Text.Trim(),
+            description.Text.Trim(),
+            sessionName.Text.Trim(),
+            serverPassword.Text,
+            mapSelection.Text.Trim(),
+            ReadPort(gamePort.Text, "Game port"),
+            ReadPort(queryPort.Text, "Query port"),
+            ReadPositiveNumber(maxPlayers.Text, "Max players", 1, 999),
+            enableRcon.Checked,
+            ReadPort(rconPort.Text, "RCON port"),
+            rconPassword.Text,
+            enableHttpApi.Checked,
+            ReadPort(httpApiPort.Text, "HTTP API port"),
+            superAdmins.Text.Trim());
+    }
+
+    private static LinuxServerProfile BuildLinuxProfile(
+        TextBox host,
+        TextBox port,
+        TextBox username,
+        ThemedComboBox authType,
+        TextBox sshKeyPath,
+        TextBox password,
+        TextBox remoteServerPath,
+        TextBox remoteConfigPath)
+    {
+        return new LinuxServerProfile(
+            host.Text.Trim(),
+            ReadPort(port.Text, "SSH port"),
+            username.Text.Trim(),
+            Convert.ToString(authType.SelectedItem) ?? "SSH Key",
+            sshKeyPath.Text.Trim(),
+            password.Text,
+            remoteServerPath.Text.Trim(),
+            remoteConfigPath.Text.Trim());
+    }
+
+    private LinuxServerProfile BuildLinuxProfileFromUi()
+    {
+        return BuildLinuxProfile(
+            _linuxHostBox,
+            _linuxPortBox,
+            _linuxUsernameBox,
+            _linuxAuthTypeCombo,
+            _linuxSshKeyBox,
+            _linuxPasswordBox,
+            _linuxRemoteServerPathBox,
+            _linuxRemoteConfigPathBox);
+    }
+
+    private WindowsServerProfile BuildWindowsProfileFromUi()
+    {
+        return BuildWindowsProfile(
+            _windowsServerFolderBox,
+            _windowsSteamCmdBox,
+            _windowsServerNameBox,
+            _windowsDescriptionBox,
+            _windowsSessionNameBox,
+            _windowsServerPasswordBox,
+            _windowsMapSelectionBox,
+            _windowsGamePortBox,
+            _windowsQueryPortBox,
+            _windowsMaxPlayersBox,
+            _windowsEnableRconToggle,
+            _windowsRconPortBox,
+            _windowsRconPasswordBox,
+            _windowsEnableHttpApiToggle,
+            _windowsHttpApiPortBox,
+            _windowsSuperAdminsBox);
+    }
+
+    private static int ReadPort(string raw, string label)
+    {
+        return ReadPositiveNumber(raw, label, 1, 65535);
+    }
+
+    private static int ReadPositiveNumber(string raw, string label, int minimum, int maximum)
+    {
+        if (!int.TryParse(raw.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) || value < minimum || value > maximum)
+        {
+            throw new InvalidOperationException(string.Create(CultureInfo.InvariantCulture, $"{label} must be a number from {minimum} to {maximum}."));
+        }
+
+        return value;
+    }
+
+    private bool RequireLinuxConnection(string action)
+    {
+        if (!_linuxConnectionTested)
+        {
+            SetServerManagerError(action + " requires Test Connection first.");
+            return false;
+        }
+
+        LogServer(action + " is using the verified Linux helper workflow.");
+        return true;
+    }
+
+    private void SaveWindowsServerConfig()
+    {
+        try
+        {
+            var profile = BuildWindowsProfileFromUi();
+            var configPath = ServerManagerService.ResolveWindowsConfigPath(profile.ServerFolderPath);
+            var hadExistingConfig = File.Exists(configPath);
+            var backupBeforeSave = _backupBeforeSaveToggle?.Checked == true;
+            var writtenPath = ServerManagerService.WriteWindowsServerConfig(profile, backupBeforeSave);
+            var profilePath = ServerManagerService.SaveWindowsProfile(profile);
+
+            _lastConfigSaveAt = DateTime.Now;
+            SetConfigStatus("Saved", Green);
+            if (backupBeforeSave && hadExistingConfig)
+            {
+                SetLastServerBackup(DateTime.Now);
+            }
+
+            LogServer("Saved Windows server config: " + writtenPath);
+            LogServer("Saved Windows profile without passwords: " + profilePath);
+            RefreshDashboard();
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError("Save failed: " + ex.Message);
+        }
+    }
+
+    private void ValidateOrUpdateWindowsServer()
+    {
+        try
+        {
+            var profile = BuildWindowsProfileFromUi();
+            var process = ServerManagerService.StartWindowsValidateOrUpdate(profile);
+            SetServerStatus(process == null ? "Not Started" : "Updating", process == null ? Orange : Cyan);
+            LogServer(process == null
+                ? "SteamCMD validate/update did not start."
+                : "Started SteamCMD validate/update for VEIN server files.");
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError("Validate/update failed: " + ex.Message);
+        }
+    }
+
+    private void StartWindowsServerFromUi()
+    {
+        try
+        {
+            var profile = BuildWindowsProfileFromUi();
+            var process = ServerManagerService.StartWindowsServer(profile.ServerFolderPath);
+            if (process == null)
+            {
+                SetServerManagerError("VEIN server executable was not found in the selected server folder.");
+                return;
+            }
+
+            TrackWindowsServerProcess(process);
+            SetServerStatus("Running", Green);
+            LogServer("Started Windows VEIN server.");
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError("Start failed: " + ex.Message);
+        }
+    }
+
+    private void RestartWindowsServerFromUi()
+    {
+        try
+        {
+            BackupWindowsConfigBeforeRestartIfNeeded();
+            StopWindowsServer();
+            StartWindowsServerFromUi();
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError("Restart failed: " + ex.Message);
+        }
+    }
+
+    private void TestLinuxConnectionFromUi()
+    {
+        var profile = BuildLinuxProfileFromUi();
+        var result = ServerManagerService.TestSshKeyConnection(profile);
+        _linuxConnectionTested = result.Connected;
+        SetConnectionStatus(result.Connected ? "Connected" : "Error", result.Connected ? Green : Red);
+        if (result.Connected) LogServer("Linux SSH key connection test passed.");
+        else SetServerManagerError(result.Message);
+    }
+
+    private void SaveLinuxProfileFromUi()
+    {
+        try
+        {
+            var path = ServerManagerService.SaveLinuxProfile(BuildLinuxProfileFromUi());
+            LogServer("Saved Linux profile without password: " + path);
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError("Profile save failed: " + ex.Message);
+        }
+    }
+
+    private void DownloadRemoteConfigFromUi()
+    {
+        try
+        {
+            if (!RequireLinuxConnection("Download Remote Config")) return;
+
+            var path = ServerManagerService.DownloadRemoteConfig(BuildLinuxProfileFromUi());
+            SetConfigStatus("Downloaded", Green);
+            LogServer("Downloaded remote config to: " + path);
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError(ex.Message);
+        }
+    }
+
+    private void UploadRemoteConfigFromUi()
+    {
+        try
+        {
+            if (_backupBeforeUploadToggle?.Checked != true)
+            {
+                SetServerManagerError("Backup before upload must stay enabled before uploading remote config.");
+                return;
+            }
+
+            if (!RequireLinuxConnection("Upload Config To Server")) return;
+
+            using var dialog = new OpenFileDialog
+            {
+                Title = "Select VEIN Linux Game.ini",
+                Filter = "INI config (*.ini)|*.ini|All files (*.*)|*.*",
+                CheckFileExists = true
+            };
+            if (dialog.ShowDialog() != DialogResult.OK) return;
+
+            var output = ServerManagerService.UploadRemoteConfig(BuildLinuxProfileFromUi(), dialog.FileName);
+            SetConfigStatus("Uploaded", Green);
+            LogServer("Uploaded config through Linux helper: " + output);
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError(ex.Message);
+        }
+    }
+
+    private void BackupRemoteServerFromUi()
+    {
+        try
+        {
+            if (!RequireLinuxConnection("Backup Remote Server")) return;
+
+            var backupPath = ServerManagerService.BackupRemoteConfig(BuildLinuxProfileFromUi());
+            AddRecentBackup(backupPath);
+            LogServer("Remote backup created: " + backupPath);
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError(ex.Message);
+        }
+    }
+
+    private void RestartLinuxServerFromUi()
+    {
+        try
+        {
+            if (_backupBeforeRestartToggle?.Checked != true)
+            {
+                SetServerManagerError("Backup before restart must stay enabled before restart.");
+                return;
+            }
+
+            if (!RequireLinuxConnection("Restart Linux Server")) return;
+
+            var profile = BuildLinuxProfileFromUi();
+            var backupPath = ServerManagerService.BackupRemoteConfig(profile);
+            AddRecentBackup(backupPath);
+            var output = ServerManagerService.RestartRemoteServer(profile);
+            SetServerStatus("Restarted", Green);
+            LogServer("Remote backup before restart: " + backupPath);
+            LogServer("Linux server restart result: " + output);
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError(ex.Message);
+        }
+    }
+
+    private void ViewRemoteLogsFromUi()
+    {
+        try
+        {
+            if (!RequireLinuxConnection("View Remote Logs")) return;
+
+            var logs = ServerManagerService.ReadRemoteLogs(BuildLinuxProfileFromUi());
+            LogServer("Remote logs:");
+            LogServer(string.IsNullOrWhiteSpace(logs) ? "(no log output)" : logs.TrimEnd());
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError(ex.Message);
+        }
+    }
+
+    private void OpenSelectedServerFolder()
+    {
+        if (CurrentServerModeIsLinux())
+        {
+            RequireLinuxConnection("Open Server Folder");
+            return;
+        }
+
+        var serverFolder = _windowsServerFolderBox.Text.Trim();
+        if (!Directory.Exists(serverFolder))
+        {
+            SetServerManagerError("Select a valid Windows server folder first.");
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo { FileName = serverFolder, UseShellExecute = true });
+        LogServer("Opened Windows server folder.");
+    }
+
+    private void OpenSelectedServerLogs()
+    {
+        if (CurrentServerModeIsLinux())
+        {
+            RequireLinuxConnection("View Remote Logs");
+            return;
+        }
+
+        var serverFolder = _windowsServerFolderBox.Text.Trim();
+        var logsFolder = Path.Combine(serverFolder, "Vein", "Saved", "Logs");
+        if (!Directory.Exists(logsFolder))
+        {
+            SetServerManagerError("Windows server logs folder was not found: " + logsFolder);
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo { FileName = logsFolder, UseShellExecute = true });
+        LogServer("Opened Windows server logs folder.");
+    }
+
+    private void BackupSelectedServerConfig()
+    {
+        if (CurrentServerModeIsLinux())
+        {
+            RequireLinuxConnection("Backup Remote Server");
+            return;
+        }
+
+        try
+        {
+            var configPath = ServerManagerService.ResolveWindowsConfigPath(_windowsServerFolderBox.Text.Trim());
+            var backupPath = ServerManagerService.CreateServerConfigBackup(configPath);
+            AddRecentBackup(backupPath);
+            LogServer("Backup created: " + backupPath);
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError("Backup failed: " + ex.Message);
+        }
+    }
+
+    private bool WindowsServerIsRunning()
+    {
+        try
+        {
+            return _windowsServerProcess is { HasExited: false };
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private void TrackWindowsServerProcess(Process process)
+    {
+        _windowsServerProcess = process;
+        process.EnableRaisingEvents = true;
+        process.Exited += (_, _) =>
+        {
+            if (IsDisposed) return;
+
+            BeginInvoke(() =>
+            {
+                SetServerStatus("Stopped", Orange);
+                LogServer("Windows VEIN server process exited.");
+            });
+        };
+    }
+
+    private void StopWindowsServer()
+    {
+        try
+        {
+            if (!WindowsServerIsRunning())
+            {
+                SetServerStatus("Stopped", Orange);
+                LogServer("No manager-started Windows server process is currently running.");
+                return;
+            }
+
+            var process = _windowsServerProcess!;
+            if (!process.CloseMainWindow() || !process.WaitForExit(5000))
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(5000);
+            }
+
+            SetServerStatus("Stopped", Orange);
+            LogServer("Stopped Windows VEIN server.");
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError("Stop failed: " + ex.Message);
+        }
+    }
+
+    private void BackupWindowsConfigBeforeRestartIfNeeded()
+    {
+        if (!_backupBeforeRestartToggle.Checked) return;
+
+        var configPath = ServerManagerService.ResolveWindowsConfigPath(_windowsServerFolderBox.Text.Trim());
+        if (!File.Exists(configPath))
+        {
+            LogServer("No Windows server config found to backup before restart.");
+            return;
+        }
+
+        var backupPath = ServerManagerService.CreateServerConfigBackup(configPath);
+        AddRecentBackup(backupPath);
+        LogServer("Backup before restart created: " + backupPath);
+    }
+
+    private void AddRecentBackup(string backupPath)
+    {
+        SetLastServerBackup(DateTime.Now);
+
+        if (_recentBackupsList.Items.Count == 1 && Convert.ToString(_recentBackupsList.Items[0]) == "No backups yet")
+        {
+            _recentBackupsList.Items.Clear();
+        }
+
+        var backupName = Path.GetFileName(Path.GetDirectoryName(backupPath)) ?? Path.GetFileName(backupPath);
+        _recentBackupsList.Items.Insert(0, backupName);
+        RefreshDashboard();
+    }
+
+    private void AddModParityFolder()
+    {
+        using var dialog = new FolderBrowserDialog { Description = "Select an approved UE4SS mod folder" };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        var path = Path.GetFullPath(dialog.SelectedPath);
+        var validation = ModParityService.ValidateModFolder(path);
+        if (!validation.IsValid)
+        {
+            SetModParityStatus(validation.Message, Red);
+            return;
+        }
+
+        if (_modParityFolders.Contains(path, StringComparer.OrdinalIgnoreCase))
+        {
+            SetModParityStatus("That mod folder is already in the approved list.", Orange);
+            return;
+        }
+
+        _modParityFolders.Add(path);
+        RefreshModParityList();
+        SetModParityStatus("Added approved mod folder: " + Path.GetFileName(path), Green);
+    }
+
+    private void RemoveSelectedModParityFolder()
+    {
+        if (_modParityList.SelectedIndex < 0 || _modParityList.SelectedIndex >= _modParityFolders.Count)
+        {
+            SetModParityStatus("Select a mod folder to remove first.", Orange);
+            return;
+        }
+
+        var removed = _modParityFolders[_modParityList.SelectedIndex];
+        _modParityFolders.RemoveAt(_modParityList.SelectedIndex);
+        RefreshModParityList();
+        SetModParityStatus("Removed approved mod folder: " + Path.GetFileName(removed), TextMuted);
+    }
+
+    private void GenerateModParityManifest()
+    {
+        try
+        {
+            var package = ModParityService.ExportPackage(_modParityFolders, BuildModParitySettings(), GetModTemplateRoot());
+            _lastModParityPackageZip = package.ZipPath;
+            SetModParityStatus($"Generated manifest for {package.Manifest.RequiredMods.Count} approved mods.", Green);
+            LogServer("Generated mod parity manifest package: " + package.ZipPath);
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError("Mod parity manifest failed: " + ex.Message);
+        }
+    }
+
+    private void ExportModParityPackage()
+    {
+        try
+        {
+            var package = ModParityService.ExportPackage(_modParityFolders, BuildModParitySettings(), GetModTemplateRoot());
+            _lastModParityPackageZip = package.ZipPath;
+            SetModParityStatus("Exported mod parity package: " + package.ZipPath, Green);
+            LogServer("Exported mod parity package: " + package.ZipPath);
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError("Mod parity export failed: " + ex.Message);
+        }
+    }
+
+    private void InstallWindowsModParityServer()
+    {
+        try
+        {
+            var target = ModParityService.InstallWindowsServerMod(
+                _windowsServerFolderBox.Text.Trim(),
+                _modParityFolders,
+                BuildModParitySettings(),
+                GetModTemplateRoot());
+            SetModParityStatus("Installed server parity scaffold: " + target, Green);
+            LogServer("Installed server parity scaffold: " + target);
+        }
+        catch (Exception ex)
+        {
+            SetServerManagerError("Mod parity install failed: " + ex.Message);
+        }
+    }
+
+    private void OpenModParityPackageFolder()
+    {
+        if (string.IsNullOrWhiteSpace(_lastModParityPackageZip) || !File.Exists(_lastModParityPackageZip))
+        {
+            SetModParityStatus("Export a mod parity package first.", Orange);
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo { FileName = Path.GetDirectoryName(_lastModParityPackageZip)!, UseShellExecute = true });
+        LogServer("Opened mod parity package folder.");
+    }
+
+    private void RefreshModParityList()
+    {
+        if (_modParityList == null) return;
+
+        _modParityList.Items.Clear();
+        foreach (var folder in _modParityFolders)
+        {
+            _modParityList.Items.Add(Path.GetFileName(folder) + "  |  " + folder);
+        }
+    }
+
+    private ModParitySettings BuildModParitySettings()
+    {
+        return new ModParitySettings(
+            _modParityAllowExtraMods.Checked,
+            NormalizeModParityEnforcement(Convert.ToString(_modParityEnforcementCombo.SelectedItem)),
+            string.IsNullOrWhiteSpace(_modParityKickMessageBox.Text)
+                ? "This server requires the approved modpack."
+                : _modParityKickMessageBox.Text.Trim());
+    }
+
+    private static string NormalizeModParityEnforcement(string? selected)
+    {
+        return string.Equals(selected, "Off", StringComparison.OrdinalIgnoreCase) ? "Off" : "Log Only";
+    }
+
+    private void SetModParityStatus(string message, Color color)
+    {
+        if (_modParityStatusLabel != null)
+        {
+            _modParityStatusLabel.Text = message;
+            _modParityStatusLabel.ForeColor = color;
+        }
+    }
+
+    private static string GetModTemplateRoot()
+    {
+        var baseDirectory = AppContext.BaseDirectory;
+        var published = Path.Combine(baseDirectory, "ModTemplate");
+        if (Directory.Exists(published)) return published;
+
+        var source = Path.GetFullPath(Path.Combine(baseDirectory, "..", "..", "..", "ModTemplate"));
+        return source;
+    }
+
+    private bool CurrentServerModeIsLinux()
+    {
+        return Convert.ToString(_serverTypeCombo.SelectedItem)?.Equals("Linux Server Setup", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private void ResetLinuxConnectionTrust(object? sender, EventArgs e)
+    {
+        if (!_linuxConnectionTested) return;
+
+        _linuxConnectionTested = false;
+        SetConnectionStatus("Retest Required", Orange);
+        LogServer("Linux connection settings changed. Test Connection again before remote actions.");
+    }
+
+    private void SetServerManagerError(string message)
+    {
+        SetConnectionStatus("Error", Red);
+        LogServer("ERROR: " + message, Red);
+    }
+
+    private void SetServerStatus(string text, Color color)
+    {
+        _serverState.StatusText = text;
+        _serverState.StatusColor = color;
+        if (_serverStatusValue != null)
+        {
+            _serverStatusValue.Text = text;
+            _serverStatusValue.ForeColor = color;
+        }
+
+        RefreshDashboard();
+    }
+
+    private void SetConfigStatus(string text, Color color)
+    {
+        _serverState.ConfigText = text;
+        _serverState.ConfigColor = color;
+        if (_configStatusValue != null)
+        {
+            _configStatusValue.Text = text;
+            _configStatusValue.ForeColor = color;
+        }
+
+        RefreshDashboard();
+    }
+
+    private void SetConnectionStatus(string text, Color color)
+    {
+        _serverState.ConnectionText = text;
+        _serverState.ConnectionColor = color;
+        if (_connectionStatusValue != null)
+        {
+            _connectionStatusValue.Text = text;
+            _connectionStatusValue.ForeColor = color;
+        }
+
+        RefreshDashboard();
+    }
+
+    private void SetLastServerBackup(DateTime when)
+    {
+        _serverState.LastBackupAt = when;
+        _lastConfigBackupAt = when;
+        if (_lastBackupValue != null)
+        {
+            _lastBackupValue.Text = when.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+            _lastBackupValue.ForeColor = Green;
+        }
+
+        RefreshDashboard();
+    }
+
+    private void LogServer(string message)
+    {
+        LogServer(message, TextMuted);
+    }
+
+    private void LogServer(string message, Color color)
+    {
+        if (_serverManagerLog == null) return;
+
+        var scrollParent = _serverManagerLog.Parent?.Parent as ScrollableControl;
+        var scrollPosition = scrollParent?.AutoScrollPosition ?? Point.Empty;
+        var line = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture) + " | " + message + Environment.NewLine;
+        _serverManagerLog.SelectionStart = _serverManagerLog.TextLength;
+        _serverManagerLog.SelectionColor = color;
+        _serverManagerLog.AppendText(line);
+        _serverManagerLog.SelectionColor = _serverManagerLog.ForeColor;
+        if (_serverLogAutoScrollToggle == null || _serverLogAutoScrollToggle.Checked)
+        {
+            _serverManagerLog.ScrollToCaret();
+        }
+
+        if (scrollParent != null)
+        {
+            scrollParent.AutoScrollPosition = new Point(-scrollPosition.X, -scrollPosition.Y);
+        }
+
+        if (!message.StartsWith("ERROR:", StringComparison.OrdinalIgnoreCase)) Log("Server Manager: " + message);
+        _serverState.HasActivity = true;
+        RefreshDashboard();
     }
 
     private RoundedPanel BuildLogTab()
@@ -883,6 +2592,7 @@ public sealed partial class MainForm : Form
             _state.CopyFrom(install.State);
             MarkUnsaved(false);
             SetImportConfigStatus("Installed to Scripts\\ui_config.lua");
+            _lastConfigBackupAt = DateTime.Now;
             Log("Backup created: " + install.BackupPath);
             Log("Installed ui_config.lua to: " + install.InstalledPath);
             LoadModFromPath(loadExistingState: true);
@@ -1049,7 +2759,9 @@ public sealed partial class MainForm : Form
         {
             var backup = LuaModService.CreateBackup(modFolder);
             Log("Backup created: " + backup);
+            _lastConfigBackupAt = DateTime.Now;
             LuaModService.ApplyConfig(modFolder, _state);
+            _lastConfigSaveAt = DateTime.Now;
             MarkUnsaved(false);
             Log("Config saved. Restart VEIN if the game is open.");
             LoadModFromPath(loadExistingState: true);
@@ -1072,6 +2784,8 @@ public sealed partial class MainForm : Form
         try
         {
             Log("Backup created: " + LuaModService.CreateBackup(modFolder));
+            _lastConfigBackupAt = DateTime.Now;
+            RefreshDashboard();
         }
         catch (Exception ex)
         {
@@ -1259,44 +2973,52 @@ public sealed partial class MainForm : Form
     private void RefreshItemEditor()
     {
         if (_loadingUi || _itemFields == null) return;
-        var item = CurrentItem();
-        _itemFields.Controls.Clear();
-        _itemInputs.Clear();
-
-        if (item == null)
+        _loadingUi = true;
+        try
         {
-            _itemClassLabel.Text = _modData == null
-                ? "Setup needed: select a valid mod folder first."
-                : "Selected item: -";
-            _itemCdoLabel.Visible = false;
-            AddSetupMessage(_itemFields, "Pick a category and item to edit overrides.");
-            return;
-        }
+            var item = CurrentItem();
+            _itemFields.Controls.Clear();
+            _itemInputs.Clear();
 
-        _itemClassLabel.Text = _itemAdvanced.Checked ? "Raw class: " + item.ClassName : "Selected item: " + FriendlyClassName(item.ClassName);
-        _itemCdoLabel.Text = "CDO path: " + (item.CdoPath ?? "-");
-        _itemCdoLabel.Visible = _itemAdvanced.Checked;
-        _itemFields.Top = _itemAdvanced.Checked ? 88 : 72;
-        _itemFields.Height = _itemAdvanced.Checked ? 188 : 204;
-
-        foreach (var field in GetFieldsForCategory(item.Category))
-        {
-            AddItemField(field.Key, field.Label, field.Kind);
-        }
-
-        if (CategoryNames.ContainerLike.Contains(item.Category))
-        {
-            if (_state.ContainerWeightOverrides.TryGetValue(item.Category, out var values) && values.TryGetValue(item.ClassName, out var value))
+            if (item == null)
             {
-                SetItemInputValue("MaxWeight", value);
+                _itemClassLabel.Text = _modData == null
+                    ? "Setup needed: select a valid mod folder first."
+                    : "Selected item: -";
+                _itemCdoLabel.Visible = false;
+                AddSetupMessage(_itemFields, "Pick a category and item to edit overrides.");
+                return;
+            }
+
+            _itemClassLabel.Text = _itemAdvanced.Checked ? "Raw class: " + item.ClassName : "Selected item: " + FriendlyClassName(item.ClassName);
+            _itemCdoLabel.Text = "CDO path: " + (item.CdoPath ?? "-");
+            _itemCdoLabel.Visible = _itemAdvanced.Checked;
+            _itemFields.Top = _itemAdvanced.Checked ? 88 : 64;
+            _itemFields.Height = _itemAdvanced.Checked ? 120 : 144;
+
+            foreach (var field in GetFieldsForCategory(item.Category))
+            {
+                AddItemField(field.Key, field.Label, field.Kind);
+            }
+
+            if (CategoryNames.ContainerLike.Contains(item.Category))
+            {
+                if (_state.ContainerWeightOverrides.TryGetValue(item.Category, out var values) && values.TryGetValue(item.ClassName, out var value))
+                {
+                    SetItemInputValue("MaxWeight", value);
+                }
+            }
+            else if (_state.ItemOverrides.TryGetValue(item.Category, out var items) && items.TryGetValue(item.ClassName, out var props))
+            {
+                foreach (var pair in props)
+                {
+                    SetItemInputValue(pair.Key, pair.Value);
+                }
             }
         }
-        else if (_state.ItemOverrides.TryGetValue(item.Category, out var items) && items.TryGetValue(item.ClassName, out var props))
+        finally
         {
-            foreach (var pair in props)
-            {
-                SetItemInputValue(pair.Key, pair.Value);
-            }
+            _loadingUi = false;
         }
     }
 
@@ -1378,6 +3100,7 @@ public sealed partial class MainForm : Form
         var modFound = LuaModService.IsValidModFolder(_modFolderBox.Text.Trim());
         _modStatus.Text = modFound ? "Found" : "Missing";
         _modStatus.ForeColor = modFound ? Green : Orange;
+        RefreshDashboard();
     }
 
     private void MarkUnsaved(bool unsaved = true)
@@ -1389,6 +3112,60 @@ public sealed partial class MainForm : Form
             ? $"Unsaved changes ({edits})"
             : $"No unsaved changes ({edits} edits)";
         _unsavedStatus.ForeColor = unsaved ? Orange : Cyan;
+        RefreshDashboard();
+    }
+
+    private void RefreshDashboard()
+    {
+        if (_dashboardValues.Count == 0) return;
+
+        var categories = _modData?.Categories.Count ?? 0;
+        var entries = _modData?.ItemCount ?? 0;
+        var edits = _state.CountEdits(_modData);
+
+        SetDashboardValue("GameStatus", _gameStatus?.Text ?? "Closed", _gameStatus?.ForeColor ?? Orange);
+        SetDashboardValue("Ue4ssStatus", _ue4ssStatus?.Text ?? "Missing", _ue4ssStatus?.ForeColor ?? Orange);
+        SetDashboardValue("ModStatus", _modStatus?.Text ?? "Missing", _modStatus?.ForeColor ?? Orange);
+        SetDashboardValue("LoadedCategories", categories.ToString(CultureInfo.InvariantCulture), categories > 0 ? Green : TextMuted);
+        SetDashboardValue("LoadedEntries", entries.ToString(CultureInfo.InvariantCulture), entries > 0 ? Green : TextMuted);
+        SetDashboardValue("UnsavedEdits", edits.ToString(CultureInfo.InvariantCulture), _hasUnsavedChanges ? Orange : Cyan);
+        SetDashboardValue("LastSave", _lastConfigSaveAt?.ToString("HH:mm:ss", CultureInfo.InvariantCulture) ?? "Never", _lastConfigSaveAt.HasValue ? Green : TextMuted);
+        var lastBackupAt = LatestBackupAt(_lastConfigBackupAt, _serverState.LastBackupAt);
+        SetDashboardValue("LastBackup", lastBackupAt?.ToString("HH:mm:ss", CultureInfo.InvariantCulture) ?? "Never", lastBackupAt.HasValue ? Green : TextMuted);
+
+        var serverSummary = _serverState.StatusText + " / " + _serverState.ConnectionText;
+        SetDashboardValue("ServerSummary", serverSummary, _serverState.StatusColor);
+        SetDashboardValue("ConfigEditsChart", edits > 0 ? $"{edits} current generated edits" : "No data yet", edits > 0 ? Cyan : TextMuted);
+        SetDashboardValue("BackupsChart", lastBackupAt.HasValue ? "Last backup at " + lastBackupAt.Value.ToString("HH:mm:ss", CultureInfo.InvariantCulture) : "No data yet", lastBackupAt.HasValue ? Green : TextMuted);
+        SetDashboardValue("LoadedSummaryChart", _modData == null ? "No mod data loaded yet" : $"{categories} categories\n{entries} entries", _modData == null ? TextMuted : Green);
+        SetDashboardValue("ServerActivityChart", _serverState.HasActivity ? "Server Manager log has activity" : "No server activity yet", _serverState.HasActivity ? Cyan : TextMuted);
+        SetDashboardValue("StatusHistoryChart", _recentActivityLines.Count == 0 ? "No data yet" : $"{_recentActivityLines.Count} recent events", _recentActivityLines.Count == 0 ? TextMuted : Cyan);
+
+        if (_dashboardActivity != null)
+        {
+            _dashboardActivity.Text = _recentActivityLines.Count == 0
+                ? "Recent activity: No data yet"
+                : "Recent activity: " + string.Join("    |    ", _recentActivityLines.TakeLast(3));
+        }
+    }
+
+    private void SetDashboardValue(string key, string value, Color color)
+    {
+        if (!_dashboardValues.TryGetValue(key, out var label)) return;
+
+        label.Text = value;
+        label.ForeColor = color;
+    }
+
+    private static DateTime? LatestBackupAt(params DateTime?[] values)
+    {
+        return values
+            .Where(value => value.HasValue)
+            .Select(value => value!.Value)
+            .DefaultIfEmpty()
+            .Max() is { Ticks: > 0 } latest
+                ? latest
+                : null;
     }
 
     private string? CurrentCategory() => Convert.ToString(_categoryCombo.SelectedItem);
@@ -1447,16 +3224,16 @@ public sealed partial class MainForm : Form
 
     private void AddCategoryField(string key, string label, FieldKind kind)
     {
-        var field = NewFieldPanel(label, 260, 94);
-        field.Margin = new Padding(0, 0, 18, 8);
+        var field = NewFieldPanel(label, 250, 96);
+        field.Margin = new Padding(0, 0, 18, 10);
         Control input = kind == FieldKind.Bool
-            ? NewCombo(14, 40, 220, BoolChoices)
-            : NewTextBox(20, 42, 220, 34);
+            ? NewCombo(20, 48, 210, BoolChoices)
+            : NewTextBox(20, 50, 210, 34);
         AddTip(input, kind == FieldKind.Bool
             ? $"Choose a category-wide default for {label}, or leave Game Default."
             : $"Enter a category-wide number for {label}, or leave blank for game default.");
         input.TextChanged += (_, _) => MarkUnsaved();
-        if (input is ComboBox combo) combo.SelectedIndexChanged += (_, _) => MarkUnsaved();
+        if (input is ThemedComboBox combo) combo.SelectedIndexChanged += (_, _) => MarkUnsaved();
         field.Controls.Add(input);
         _categoryInputs[key] = input;
         _categoryFields.Controls.Add(field);
@@ -1464,15 +3241,15 @@ public sealed partial class MainForm : Form
 
     private void AddItemField(string key, string label, FieldKind kind)
     {
-        var field = NewFieldPanel(label, 270, 100);
-        field.Margin = new Padding(0, 0, 18, 8);
-        var check = NewCheckBox("Use Game Default", 50, 40, 170);
+        var field = NewFieldPanel(label, 250, 110);
+        field.Margin = new Padding(0, 0, 18, 10);
+        var check = NewCheckBox("Use Game Default", 34, 42, 182);
         check.Checked = true;
         check.BackColor = InnerBack;
         AddTip(check, "Leave checked to keep the game's value. Uncheck to type a generated override.");
         Control input = kind == FieldKind.Bool
-            ? NewCombo(25, 64, 220, BoolChoices)
-            : NewTextBox(25, 66, 220, 34);
+            ? NewCombo(25, 68, 200, BoolChoices)
+            : NewTextBox(25, 70, 200, 34);
         AddTip(input, kind == FieldKind.Bool
             ? $"Choose an override for {label}, or keep Game Default."
             : $"Type the {label} override for this one item.");
@@ -1483,7 +3260,7 @@ public sealed partial class MainForm : Form
             _itemFields?.PerformLayout();
             MarkUnsaved();
         };
-        if (input is ComboBox combo) combo.SelectedIndexChanged += (_, _) => MarkUnsaved();
+        if (input is ThemedComboBox combo) combo.SelectedIndexChanged += (_, _) => MarkUnsaved();
         else input.TextChanged += (_, _) => MarkUnsaved();
         field.Controls.Add(check);
         field.Controls.Add(input);
@@ -1495,7 +3272,7 @@ public sealed partial class MainForm : Form
     {
         input.Enabled = editMode;
         input.Visible = editMode;
-        field.Height = editMode ? 108 : 80;
+        field.Height = editMode ? 112 : 82;
     }
 
     private void AddCategoryNumber(Dictionary<string, LuaValue> values, string key, bool allowNegative = true)
@@ -1506,7 +3283,7 @@ public sealed partial class MainForm : Form
 
     private void AddCategoryBool(Dictionary<string, LuaValue> values, string key)
     {
-        if (!_categoryInputs.TryGetValue(key, out var input) || input is not ComboBox combo) return;
+        if (!_categoryInputs.TryGetValue(key, out var input) || input is not ThemedComboBox combo) return;
         var value = ReadBoolCombo(combo);
         if (!value.IsNil) values[key] = value;
     }
@@ -1518,7 +3295,7 @@ public sealed partial class MainForm : Form
 
     private void AddItemBool(Dictionary<string, LuaValue> values, string key)
     {
-        if (!_itemInputs.TryGetValue(key, out var field) || field.DefaultCheck.Checked || field.Input is not ComboBox combo) return;
+        if (!_itemInputs.TryGetValue(key, out var field) || field.DefaultCheck.Checked || field.Input is not ThemedComboBox combo) return;
         var value = ReadBoolCombo(combo);
         if (!value.IsNil) values[key] = value;
     }
@@ -1553,7 +3330,7 @@ public sealed partial class MainForm : Form
         return true;
     }
 
-    private static LuaValue ReadBoolCombo(ComboBox combo)
+    private static LuaValue ReadBoolCombo(ThemedComboBox combo)
     {
         return combo.SelectedIndex switch
         {
@@ -1567,7 +3344,7 @@ public sealed partial class MainForm : Form
     {
         if (!inputs.TryGetValue(key, out var input)) return;
         if (input is TextBox box) box.Text = value.ToLua();
-        if (input is ComboBox combo && value.Value is bool b) combo.SelectedIndex = b ? 1 : 2;
+        if (input is ThemedComboBox combo && value.Value is bool b) combo.SelectedIndex = b ? 1 : 2;
     }
 
     private void SetItemInputValue(string key, LuaValue value)
@@ -1576,7 +3353,7 @@ public sealed partial class MainForm : Form
         field.DefaultCheck.Checked = false;
         SetItemFieldEditMode(field.DefaultCheck.Parent!, field.Input, editMode: true);
         if (field.Input is TextBox box) box.Text = value.ToLua();
-        if (field.Input is ComboBox combo && value.Value is bool b) combo.SelectedIndex = b ? 1 : 2;
+        if (field.Input is ThemedComboBox combo && value.Value is bool b) combo.SelectedIndex = b ? 1 : 2;
     }
 
     private Dictionary<string, LuaValue> GetCategoryDefaults(string category)
@@ -1629,11 +3406,23 @@ public sealed partial class MainForm : Form
         _log.AppendText(line);
         _log.SelectionColor = _log.ForeColor;
         _log.ScrollToCaret();
+        TrackRecentActivity(line.TrimEnd());
+    }
+
+    private void TrackRecentActivity(string line)
+    {
+        _recentActivityLines.Add(line);
+        if (_recentActivityLines.Count > 12)
+        {
+            _recentActivityLines.RemoveAt(0);
+        }
+
+        RefreshDashboard();
     }
 
     private static RoundedPanel NewContentPanel()
     {
-        return NewPanel(12, 0, 54, 1020, 484);
+        return NewPanel(12, 0, 0, 1020, 512);
     }
 
     private static FlowLayoutPanel NewFieldFlow(int x, int y, int w, int h)
@@ -1662,8 +3451,46 @@ public sealed partial class MainForm : Form
             BorderColor = BorderSoft,
             BackColor = PanelBack
         };
-        panel.Controls.Add(MakeLabel(label, 16, 8, width - 32, 26, 12, FontStyle.Bold, TextMain, ContentAlignment.MiddleCenter, InnerBack));
+        panel.Controls.Add(MakeLabel(label, 18, 12, width - 36, 26, 12, FontStyle.Bold, TextMain, ContentAlignment.MiddleCenter, InnerBack));
         return panel;
+    }
+
+    private void ShowReadmePopup()
+    {
+        using var popup = new Form
+        {
+            Text = "Readme",
+            ClientSize = new Size(520, 400),
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            StartPosition = FormStartPosition.CenterParent,
+            BackColor = AppBack,
+            ForeColor = TextMain,
+            Font = new Font("Segoe UI", 11F, FontStyle.Regular),
+            ShowInTaskbar = false
+        };
+
+        popup.Shown += (_, _) => UseDarkTitleBar(popup.Handle);
+
+        var shell = NewPanel(14, 18, 18, 484, 364);
+        shell.BackColor = AppBack;
+        popup.Controls.Add(shell);
+
+        shell.Controls.Add(MakeLabel("Readme", 28, 24, 220, 34, 20, FontStyle.Bold, TextMain, ContentAlignment.MiddleLeft, PanelBack));
+        shell.Controls.Add(MakeLabel("Quick setup steps", 30, 64, 360, 24, 12, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
+        shell.Controls.Add(MakeWrappedLabel(
+            "1. Select or auto-detect your VEIN folder.\n\n2. Pick a category or item to edit.\n\n3. Change only the values you want.\n\n4. Save Config, then restart VEIN so the Lua mod reloads the new values.",
+            30,
+            112,
+            420,
+            190,
+            12.5F,
+            FontStyle.Regular,
+            TextMuted,
+            PanelBack));
+
+        popup.ShowDialog(this);
     }
 
     private static RoundedPanel NewPresetCard(string title, string description, int x, int y, Action action)
@@ -1683,9 +3510,9 @@ public sealed partial class MainForm : Form
         parent.Controls.Add(MakeLabel(text, 8, 8, Math.Max(260, parent.Width - 20), 36, 13, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, parent.BackColor));
     }
 
-    private static ThemedTextBox NewTextBox(int x, int y, int w, int h)
+    private static ThemedTextBox NewTextBox(int x, int y, int w, int h, bool password = false)
     {
-        return new ThemedTextBox
+        var box = new ThemedTextBox
         {
             Left = x,
             Top = y,
@@ -1694,6 +3521,7 @@ public sealed partial class MainForm : Form
             BackColor = InnerBack,
             ForeColor = TextMain,
             FillColor = InnerBack,
+            FocusedFillColor = Color.FromArgb(6, 18, 32),
             BorderColor = Border,
             FocusedBorderColor = Purple,
             TextColor = TextMain,
@@ -1701,6 +3529,14 @@ public sealed partial class MainForm : Form
             BorderStyle = BorderStyle.None,
             Font = new Font("Segoe UI", 12F, FontStyle.Regular)
         };
+
+        if (password)
+        {
+            box.Multiline = false;
+            box.UseSystemPasswordChar = true;
+        }
+
+        return box;
     }
 
     private static ThemedComboBox NewCombo(int x, int y, int w, IEnumerable<string> items)
@@ -1726,7 +3562,7 @@ public sealed partial class MainForm : Form
         return combo;
     }
 
-    private static void ConfigureComboDropDown(ComboBox combo)
+    private static void ConfigureComboDropDown(ThemedComboBox combo)
     {
         combo.MaxDropDownItems = Math.Clamp(combo.Items.Count, 1, MaxVisibleComboRows);
         combo.DropDownWidth = combo.Width;
@@ -1780,7 +3616,7 @@ public sealed partial class MainForm : Form
         const int textLeft = 20;
         const int valueLeft = 16;
         panel.Controls.Add(MakeLabel(title, textLeft, 12, w - 40, 20, 11, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
-        var valueLabel = MakeLabel(value, valueLeft, 28, w - 38, 30, 20, FontStyle.Regular, valueColor, ContentAlignment.MiddleLeft, PanelBack);
+        var valueLabel = MakeLabel(value, valueLeft, 28, w - 38, 30, 16, FontStyle.Regular, valueColor, ContentAlignment.MiddleLeft, PanelBack);
         panel.Controls.Add(valueLabel);
         panel.Controls.Add(MakeLabel(sub, textLeft, 58, w - 40, 18, 8.5F, FontStyle.Regular, TextMuted, ContentAlignment.MiddleLeft, PanelBack));
         panel.Tag = valueLabel;
@@ -1888,6 +3724,25 @@ public sealed partial class MainForm : Form
         };
     }
 
+    private static RoundedButton NewSidebarTabButton(string text, int x, int y)
+    {
+        return new RoundedButton
+        {
+            Text = text,
+            Left = x,
+            Top = y,
+            Width = 136,
+            Height = 44,
+            Radius = 12,
+            FillColor = InnerBack,
+            HoverColor = Color.FromArgb(18, 31, 50),
+            BorderColor = BorderSoft,
+            ForeColor = TextMain,
+            Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
+            FlatStyle = FlatStyle.Flat
+        };
+    }
+
     private static void UseDarkTitleBar(IntPtr handle)
     {
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)) return;
@@ -1916,5 +3771,17 @@ public sealed partial class MainForm : Form
     private sealed record ItemChoice(string ClassName, string DisplayName)
     {
         public override string ToString() => DisplayName;
+    }
+
+    private sealed class ServerManagerUiState
+    {
+        public string StatusText { get; set; } = "Stopped";
+        public Color StatusColor { get; set; } = Orange;
+        public string ConfigText { get; set; } = "Not Saved";
+        public Color ConfigColor { get; set; } = Orange;
+        public string ConnectionText { get; set; } = "Not Connected";
+        public Color ConnectionColor { get; set; } = Orange;
+        public DateTime? LastBackupAt { get; set; }
+        public bool HasActivity { get; set; }
     }
 }
