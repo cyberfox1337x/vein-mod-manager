@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.ComponentModel;
@@ -24,6 +25,7 @@ public sealed partial class MainForm : Form
     private static readonly Color Red = Color.FromArgb(255, 87, 87);
     private static readonly Color Cyan = Color.FromArgb(18, 223, 213);
     private const int MaxVisibleComboRows = 14;
+    private const int MaxLogLines = 500;
     private static readonly string[] BoolChoices = { "Game Default", "True", "False" };
     private const string SettingsDirectoryName = "VeinModManager";
     private const string SettingsFileName = "settings.json";
@@ -910,13 +912,12 @@ public sealed partial class MainForm : Form
 
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var settings = new LocalPathSettings
             {
                 GameFolder = _gameFolderBox.Text.Trim(),
                 ModFolder = _modFolderBox.Text.Trim()
             };
-            File.WriteAllText(path, JsonSerializer.Serialize(settings, SettingsJsonOptions));
+            WriteTextAtomic(path, JsonSerializer.Serialize(settings, SettingsJsonOptions));
         }
         catch (Exception ex)
         {
@@ -930,6 +931,31 @@ public sealed partial class MainForm : Form
         return string.IsNullOrWhiteSpace(localAppData)
             ? null
             : Path.Combine(localAppData, SettingsDirectoryName, SettingsFileName);
+    }
+
+    private static void WriteTextAtomic(string path, string content)
+    {
+        var directory = Path.GetDirectoryName(path) ?? ".";
+        Directory.CreateDirectory(directory);
+        var tempPath = Path.Combine(directory, Path.GetFileName(path) + "." + Guid.NewGuid().ToString("N") + ".tmp");
+
+        try
+        {
+            using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+            using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
+            {
+                writer.Write(content);
+                writer.Flush();
+                stream.Flush(flushToDisk: true);
+            }
+
+            if (File.Exists(path)) File.Replace(tempPath, path, null);
+            else File.Move(tempPath, path);
+        }
+        finally
+        {
+            if (File.Exists(tempPath)) File.Delete(tempPath);
+        }
     }
 
     private static bool IsValidGameFolder(string? path)
@@ -1217,6 +1243,22 @@ public sealed partial class MainForm : Form
         {
             LogError("Cannot save. Select a valid ItemAndContainerModifier folder first.");
             return false;
+        }
+
+        if (IsGameRunning())
+        {
+            var result = MessageBox.Show(
+                this,
+                "VEIN appears to be running. Save anyway, then restart the game for changes to apply?",
+                "VEIN is running",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+            if (result != DialogResult.Yes)
+            {
+                Log("Save canceled because VEIN is running.");
+                return false;
+            }
         }
 
         try
@@ -1565,6 +1607,14 @@ public sealed partial class MainForm : Form
         UpdateStatuses();
     }
 
+    private static bool IsGameRunning()
+    {
+        return IsAnyProcessRunning(
+            "Vein-Win64-Test",
+            "Vein",
+            "Vein-Win64-Shipping");
+    }
+
     private static bool IsAnyProcessRunning(params string[] processNames)
     {
         foreach (var processName in processNames)
@@ -1588,10 +1638,7 @@ public sealed partial class MainForm : Form
 
     private void UpdateStatuses()
     {
-        var gameRunning = IsAnyProcessRunning(
-            "Vein-Win64-Test",
-            "Vein",
-            "Vein-Win64-Shipping");
+        var gameRunning = IsGameRunning();
         _gameStatus.Text = gameRunning ? "Open" : "Closed";
         _gameStatus.ForeColor = gameRunning ? Green : Orange;
 
@@ -1862,12 +1909,35 @@ public sealed partial class MainForm : Form
 
     private void AppendLog(string msg, Color color)
     {
+        msg = RedactUserProfile(msg);
         var line = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture) + " | " + msg + Environment.NewLine;
         _log.SelectionStart = _log.TextLength;
         _log.SelectionColor = color;
         _log.AppendText(line);
         _log.SelectionColor = _log.ForeColor;
+        TrimLog();
+        _log.SelectionStart = _log.TextLength;
         _log.ScrollToCaret();
+    }
+
+    private void TrimLog()
+    {
+        var lineCount = _log.Lines.Length;
+        if (lineCount <= MaxLogLines) return;
+
+        var firstCharToKeep = _log.GetFirstCharIndexFromLine(lineCount - MaxLogLines);
+        if (firstCharToKeep <= 0) return;
+
+        _log.Select(0, firstCharToKeep);
+        _log.SelectedText = "";
+    }
+
+    private static string RedactUserProfile(string text)
+    {
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return string.IsNullOrWhiteSpace(profile)
+            ? text
+            : text.Replace(profile, "~", StringComparison.OrdinalIgnoreCase);
     }
 
     private static RoundedPanel NewContentPanel()

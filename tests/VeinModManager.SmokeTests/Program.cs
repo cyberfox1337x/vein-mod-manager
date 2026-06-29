@@ -128,6 +128,56 @@ public sealed class SmokeTests
         }
     }
 
+    [Theory]
+    [InlineData("local UiConfig = {}", "return UiConfig")]
+    [InlineData("return UiConfig", "UiConfig table")]
+    [InlineData("local UiConfig = { CategoryDefaults = { vehicles = { MaxWeight = \"unterminated } } }\nreturn UiConfig", "parse")]
+    [InlineData("local UiConfig = { CategoryDefaults = { vehicles = { MaxWeight = 999999999999999999999999999999999999999999999999999999999999 } } }\nreturn UiConfig", "parse")]
+    public void LoadUiConfigStateFromFile_MalformedConfigThrowsInvalidDataException(string lua, string expectedMessage)
+    {
+        var testRoot = CreateTempRoot();
+        var configPath = Path.Combine(testRoot, "ui_config.lua");
+
+        try
+        {
+            File.WriteAllText(configPath, lua);
+
+            var ex = Assert.Throws<InvalidDataException>(() => LuaModService.LoadUiConfigStateFromFile(configPath));
+            Assert.Contains(expectedMessage, ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(testRoot);
+        }
+    }
+
+    [Fact]
+    public void InstallUiConfig_RejectsMalformedSourceAndPreservesDestination()
+    {
+        var template = GetTemplateFolder();
+        var testRoot = CreateTempRoot();
+        var modFolder = Path.Combine(testRoot, "ItemAndContainerModifier");
+        var sourceConfigPath = Path.Combine(testRoot, "source", "ui_config.lua");
+
+        try
+        {
+            CopyDirectory(template, modFolder);
+            SeedExistingUiConfig(modFolder);
+            Directory.CreateDirectory(Path.GetDirectoryName(sourceConfigPath)!);
+            File.WriteAllText(sourceConfigPath, "local UiConfig = {");
+
+            Assert.Throws<InvalidDataException>(() => LuaModService.InstallUiConfig(modFolder, sourceConfigPath));
+
+            var loaded = LuaModService.LoadUiConfigState(modFolder);
+            Assert.Equal(7, loaded.CountEdits(LuaModService.LoadModData(modFolder)));
+            AssertNumber(999999m, loaded.CategoryDefaults["backpacks"]["ExtraWeightCapacity"]);
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(testRoot);
+        }
+    }
+
     [Fact]
     public void CategoryTemplates_DoNotContainDuplicateKeysOrClasses()
     {

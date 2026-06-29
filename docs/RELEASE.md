@@ -8,6 +8,8 @@ Use this checklist before uploading a public build.
 - `dotnet build VeinModManager.sln --configuration Release --no-restore` passes.
 - `dotnet test VeinModManager.sln --configuration Release --no-build --verbosity normal` passes.
 - `dotnet publish src\VeinModManager\VeinModManager.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts\VeinModManager-win-x64` passes.
+- `artifacts\VeinModManager-win-x64.zip` is uploaded by the manual workflow.
+- `artifacts\VeinModManager-win-x64.zip.sha256` is uploaded with the release zip checksum.
 - GitHub release artifacts are produced only by manually running the `dotnet` workflow.
 - No private local files are staged.
 - No generated build or diagnostic output is staged.

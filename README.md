@@ -44,10 +44,11 @@ dotnet test VeinModManager.sln --configuration Release --no-build --verbosity no
 dotnet publish src\VeinModManager\VeinModManager.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts\VeinModManager-win-x64
 ```
 
-The published app is written to:
+The release workflow packages:
 
 ```text
-artifacts\VeinModManager-win-x64\
+artifacts\VeinModManager-win-x64.zip
+artifacts\VeinModManager-win-x64.zip.sha256
 ```
 
 ## Branch Flow
