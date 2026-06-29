@@ -3,6 +3,7 @@ using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using System.ComponentModel;
 
 namespace VEIN_Item_And_Container_Modifier;
@@ -24,6 +25,9 @@ public sealed partial class MainForm : Form
     private static readonly Color Cyan = Color.FromArgb(18, 223, 213);
     private const int MaxVisibleComboRows = 14;
     private static readonly string[] BoolChoices = { "Game Default", "True", "False" };
+    private const string SettingsDirectoryName = "VeinModManager";
+    private const string SettingsFileName = "settings.json";
+    private static readonly JsonSerializerOptions SettingsJsonOptions = new() { WriteIndented = true };
 
     private readonly UiConfigState _state = new();
     private readonly System.Windows.Forms.Timer _statusTimer = new() { Interval = 1000 };
@@ -72,6 +76,7 @@ public sealed partial class MainForm : Form
         if (LoadWindowIcon() is { } windowIcon) Icon = windowIcon;
         BuildUi();
 
+        LoadPathSettings();
         AutoDetectPaths(log: true);
         LoadModFromPath();
 
@@ -114,6 +119,37 @@ public sealed partial class MainForm : Form
         if (IsDesignerHosted) return;
 
         UseDarkTitleBar(Handle);
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (!e.Cancel && _hasUnsavedChanges)
+        {
+            var result = MessageBox.Show(
+                this,
+                "You have unsaved config changes. Choose Yes to save, No to discard them, or Cancel to keep editing.",
+                "Save changes before closing?",
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button1);
+
+            if (result == DialogResult.Cancel)
+            {
+                e.Cancel = true;
+            }
+            else if (result == DialogResult.Yes && (!TrySaveConfig() || _hasUnsavedChanges))
+            {
+                e.Cancel = true;
+                MessageBox.Show(
+                    this,
+                    "The config could not be saved, so Vein Mod Manager will stay open. Check the log for details.",
+                    "Save failed",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+        base.OnFormClosing(e);
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -749,24 +785,52 @@ public sealed partial class MainForm : Form
 
     private void AutoDetectPaths(bool log)
     {
+        var savedGameFolder = _gameFolderBox.Text.Trim();
+        var savedModFolder = _modFolderBox.Text.Trim();
+        var hasSavedGameFolder = IsValidGameFolder(savedGameFolder);
+        var hasSavedModFolder = LuaModService.IsValidModFolder(savedModFolder);
+
+        if (hasSavedGameFolder)
+        {
+            var modFolder = hasSavedModFolder
+                ? savedModFolder
+                : LuaModService.DetectModFolder(savedGameFolder) ?? LuaModService.GetExpectedModFolder(savedGameFolder);
+            _gameFolderBox.Text = savedGameFolder;
+            _modFolderBox.Text = modFolder;
+
+            TryInstallBundledMod(savedGameFolder, modFolder, log);
+
+            if (log) Log("Using saved VEIN path: " + savedGameFolder);
+            if (log) Log("Using mod path: " + modFolder);
+            SavePathSettings();
+            LoadModFromPath(loadExistingState: true);
+            UpdateStatuses();
+            return;
+        }
+
         var gameFolder = LuaModService.DetectGameFolder();
         if (!string.IsNullOrWhiteSpace(gameFolder))
         {
             _gameFolderBox.Text = gameFolder;
-            var modFolder = LuaModService.DetectModFolder(gameFolder) ?? LuaModService.GetExpectedModFolder(gameFolder);
+            var modFolder = hasSavedModFolder
+                ? savedModFolder
+                : LuaModService.DetectModFolder(gameFolder) ?? LuaModService.GetExpectedModFolder(gameFolder);
             _modFolderBox.Text = modFolder;
 
             TryInstallBundledMod(gameFolder, modFolder, log);
 
             if (log) Log("Detected VEIN path: " + gameFolder);
-            if (log) Log("Detected mod path: " + modFolder);
+            if (log) Log("Using mod path: " + modFolder);
             LoadModFromPath(loadExistingState: true);
         }
         else if (log)
         {
-            Log("VEIN path was not auto-detected. Use Browse.");
+            Log(hasSavedModFolder
+                ? "VEIN path was not auto-detected. Keeping the saved mod folder."
+                : "VEIN path was not auto-detected. Use Browse.");
         }
 
+        SavePathSettings();
         UpdateStatuses();
     }
 
@@ -778,6 +842,7 @@ public sealed partial class MainForm : Form
         var expected = LuaModService.DetectModFolder(dlg.SelectedPath) ?? LuaModService.GetExpectedModFolder(dlg.SelectedPath);
         _modFolderBox.Text = expected;
         TryInstallBundledMod(dlg.SelectedPath, expected, log: true);
+        SavePathSettings();
         LoadModFromPath(loadExistingState: true);
         MarkUnsaved(false);
         Log("Selected VEIN path: " + dlg.SelectedPath);
@@ -805,12 +870,78 @@ public sealed partial class MainForm : Form
         }
     }
 
+    private void LoadPathSettings()
+    {
+        var path = GetLocalSettingsPath();
+        if (path == null || !File.Exists(path)) return;
+
+        try
+        {
+            var settings = JsonSerializer.Deserialize<LocalPathSettings>(File.ReadAllText(path));
+            if (settings == null) return;
+
+            var gameFolder = settings.GameFolder;
+            if (!string.IsNullOrWhiteSpace(gameFolder) && IsValidGameFolder(gameFolder))
+            {
+                _gameFolderBox.Text = gameFolder;
+            }
+
+            var modFolder = settings.ModFolder;
+            if (!string.IsNullOrWhiteSpace(modFolder) && LuaModService.IsValidModFolder(modFolder))
+            {
+                _modFolderBox.Text = modFolder;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogError("Saved path settings could not be loaded. Auto Detect will be used instead. " + ex.Message);
+        }
+    }
+
+    private void SavePathSettings()
+    {
+        var path = GetLocalSettingsPath();
+        if (path == null) return;
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var settings = new LocalPathSettings
+            {
+                GameFolder = _gameFolderBox.Text.Trim(),
+                ModFolder = _modFolderBox.Text.Trim()
+            };
+            File.WriteAllText(path, JsonSerializer.Serialize(settings, SettingsJsonOptions));
+        }
+        catch (Exception ex)
+        {
+            LogError("Path settings could not be saved, but the app can continue. " + ex.Message);
+        }
+    }
+
+    private static string? GetLocalSettingsPath()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        return string.IsNullOrWhiteSpace(localAppData)
+            ? null
+            : Path.Combine(localAppData, SettingsDirectoryName, SettingsFileName);
+    }
+
+    private static bool IsValidGameFolder(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return false;
+        return File.Exists(Path.Combine(path, "Vein", "Binaries", "Win64", "Vein-Win64-Test.exe"))
+            || File.Exists(Path.Combine(path, "Vein", "Binaries", "Win64", "Vein.exe"))
+            || Directory.Exists(Path.Combine(path, "Vein", "Content", "Paks"));
+    }
+
     private void BrowseModFolder()
     {
         using var dlg = new FolderBrowserDialog { Description = "Select ItemAndContainerModifier folder" };
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
         _modFolderBox.Text = dlg.SelectedPath;
         LoadModFromPath(loadExistingState: true);
+        SavePathSettings();
         Log("Selected mod folder: " + dlg.SelectedPath);
     }
 
@@ -862,6 +993,7 @@ public sealed partial class MainForm : Form
             Log(markUnsaved
                 ? $"Imported {editCount} generated edits into the editor."
                 : $"Loaded {editCount} generated edits from the current mod folder.");
+            SavePathSettings();
             return true;
         }
         catch (Exception ex)
@@ -903,6 +1035,7 @@ public sealed partial class MainForm : Form
             Log("Backup created: " + install.BackupPath);
             Log("Installed ui_config.lua to: " + install.InstalledPath);
             LoadModFromPath(loadExistingState: true);
+            SavePathSettings();
         }
         catch (Exception ex)
         {
@@ -1054,12 +1187,17 @@ public sealed partial class MainForm : Form
 
     private void SaveConfig()
     {
+        _ = TrySaveConfig();
+    }
+
+    private bool TrySaveConfig()
+    {
         LoadModFromPath(loadExistingState: false);
         var modFolder = _modFolderBox.Text.Trim();
         if (!LuaModService.IsValidModFolder(modFolder))
         {
-            LogError("Cannot save. Select the ItemAndContainerModifier folder first.");
-            return;
+            LogError("Cannot save. Select a valid ItemAndContainerModifier folder first.");
+            return false;
         }
 
         try
@@ -1068,12 +1206,15 @@ public sealed partial class MainForm : Form
             Log("Backup created: " + backup);
             LuaModService.ApplyConfig(modFolder, _state);
             MarkUnsaved(false);
+            SavePathSettings();
             Log("Config saved. Restart VEIN if the game is open.");
             LoadModFromPath(loadExistingState: true);
+            return !_hasUnsavedChanges;
         }
         catch (Exception ex)
         {
-            LogError("Save failed: " + ex.Message);
+            LogError("Save failed. Your unsaved changes are still open in the editor. " + ex.Message);
+            return false;
         }
     }
 
@@ -1985,6 +2126,12 @@ public sealed partial class MainForm : Form
     private static readonly Regex AcronymBoundaryPattern = new(@"(?<=[A-Z])(?=[A-Z][a-z])", RegexOptions.Compiled);
     private static readonly Regex NumberBoundaryPattern = new(@"(?<=\D)(?=\d)", RegexOptions.Compiled);
     private static readonly Regex WhitespacePattern = new(@"\s+", RegexOptions.Compiled);
+
+    private sealed class LocalPathSettings
+    {
+        public string? GameFolder { get; set; }
+        public string? ModFolder { get; set; }
+    }
 
     private enum FieldKind
     {

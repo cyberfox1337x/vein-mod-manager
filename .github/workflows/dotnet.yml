@@ -13,8 +13,10 @@ on:
       - dev
       - staging
 
+  workflow_dispatch:
+
 jobs:
-  build:
+  ci:
     runs-on: windows-latest
 
     steps:
@@ -27,10 +29,33 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore
-        run: dotnet restore tests\VeinModManager.SmokeTests\VeinModManager.SmokeTests.csproj
+        run: dotnet restore VeinModManager.sln
 
       - name: Build
-        run: dotnet build tests\VeinModManager.SmokeTests\VeinModManager.SmokeTests.csproj --no-restore
+        run: dotnet build VeinModManager.sln --configuration Release --no-restore
 
-      - name: Smoke test
-        run: dotnet run --no-build --project tests\VeinModManager.SmokeTests\VeinModManager.SmokeTests.csproj -- src\VeinModManager\ModTemplate\ItemAndContainerModifier
+      - name: Test
+        run: dotnet test VeinModManager.sln --configuration Release --no-build --verbosity normal
+
+  release:
+    if: github.event_name == 'workflow_dispatch'
+    needs: ci
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish win-x64
+        run: dotnet publish src\VeinModManager\VeinModManager.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts\VeinModManager-win-x64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VeinModManager-win-x64
+          path: artifacts\VeinModManager-win-x64

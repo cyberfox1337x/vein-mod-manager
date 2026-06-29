@@ -4,9 +4,11 @@ Use this checklist before uploading a public build.
 
 ## Code
 
-- `dotnet restore tests\VeinModManager.SmokeTests\VeinModManager.SmokeTests.csproj` passes.
-- `dotnet build tests\VeinModManager.SmokeTests\VeinModManager.SmokeTests.csproj --no-restore` passes.
-- `dotnet publish src\VeinModManager\VeinModManager.csproj -c Release -r win-x64 --self-contained true` passes.
+- `dotnet restore VeinModManager.sln` passes.
+- `dotnet build VeinModManager.sln --configuration Release --no-restore` passes.
+- `dotnet test VeinModManager.sln --configuration Release --no-build --verbosity normal` passes.
+- `dotnet publish src\VeinModManager\VeinModManager.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts\VeinModManager-win-x64` passes.
+- GitHub release artifacts are produced only by manually running the `dotnet` workflow.
 - No private local files are staged.
 - No generated build or diagnostic output is staged.
 
@@ -25,7 +27,7 @@ Use this checklist before uploading a public build.
 
 ## Package
 
-- Include the published app folder.
+- Include `artifacts\VeinModManager-win-x64\`.
 - Include bundled `ModTemplate`.
 - Include README.
 - Do not include private local settings or user-specific config.
