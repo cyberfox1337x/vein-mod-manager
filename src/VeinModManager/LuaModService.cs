@@ -346,7 +346,6 @@ public static partial class LuaModService
         var scripts = Path.Combine(modFolder, "Scripts");
         Directory.CreateDirectory(scripts);
         var uiConfigPath = Path.Combine(scripts, "ui_config.lua");
-        ValidateExistingUiConfig(uiConfigPath);
         EnsureConfigPatched(Path.Combine(scripts, "config.lua"));
         WriteUiConfigAtomic(uiConfigPath, state);
     }
@@ -369,7 +368,6 @@ public static partial class LuaModService
         }
 
         var state = LoadUiConfigStateFromFile(sourceUiConfigPath);
-        ValidateExistingUiConfig(Path.Combine(modFolder, "Scripts", "ui_config.lua"));
         var backupPath = CreateBackup(modFolder);
         ApplyConfig(modFolder, state);
         return new ConfigInstallResult(backupPath, Path.Combine(modFolder, "Scripts", "ui_config.lua"), state);
@@ -462,7 +460,6 @@ public static partial class LuaModService
         var directory = Path.GetDirectoryName(uiConfigPath) ?? ".";
         Directory.CreateDirectory(directory);
 
-        ValidateExistingUiConfig(uiConfigPath);
 
         if (File.Exists(uiConfigPath))
         {
@@ -814,10 +811,6 @@ public static partial class LuaModService
         }
     }
 
-    private static void ValidateExistingUiConfig(string uiConfigPath)
-    {
-        if (File.Exists(uiConfigPath)) _ = ReadUiConfigRoot(uiConfigPath);
-    }
 
     private static Dictionary<string, object?> ReadUiConfigRoot(string uiConfigPath)
     {

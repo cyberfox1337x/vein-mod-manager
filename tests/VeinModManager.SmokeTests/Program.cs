@@ -100,6 +100,35 @@ public sealed class SmokeTests
     }
 
     [Fact]
+    public void ApplyConfig_ReplacesMalformedExistingUiConfig()
+    {
+        var template = GetTemplateFolder();
+        var testRoot = CreateTempRoot();
+        var modFolder = Path.Combine(testRoot, "ItemAndContainerModifier");
+
+        try
+        {
+            CopyDirectory(template, modFolder);
+            File.WriteAllText(Path.Combine(modFolder, "Scripts", "ui_config.lua"), "local UiConfig = {");
+
+            var state = new UiConfigState();
+            state.CategoryDefaults["vehicles"] = new Dictionary<string, LuaValue>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["MaxWeight"] = new(12345m)
+            };
+
+            LuaModService.ApplyConfig(modFolder, state);
+
+            var loaded = LuaModService.LoadUiConfigState(modFolder);
+            AssertNumber(12345m, loaded.CategoryDefaults["vehicles"]["MaxWeight"]);
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(testRoot);
+        }
+    }
+
+    [Fact]
     public void CategoryTemplates_DoNotContainDuplicateKeysOrClasses()
     {
         var duplicates = ReadCategoryIdentifiers()
