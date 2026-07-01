@@ -9,6 +9,7 @@ namespace VEIN_Item_And_Container_Modifier;
 public static partial class LuaModService
 {
     private const string VeinSteamAppId = "1857950";
+    private const string ModName = "ItemAndContainerModifier";
     private const string PatchMarker = "UI_CONFIG_SUPPORT_BEGIN";
 
     public static string? DetectGameFolder()
@@ -40,7 +41,7 @@ public static partial class LuaModService
 
     public static string GetExpectedModFolder(string gameFolder)
     {
-        return Path.Combine(gameFolder, "Vein", "Binaries", "Win64", "ue4ss", "Mods", "ItemAndContainerModifier");
+        return Path.Combine(gameFolder, "Vein", "Binaries", "Win64", "ue4ss", "Mods", ModName);
     }
 
     public static string? DetectModFolder(string gameFolder)
@@ -53,7 +54,7 @@ public static partial class LuaModService
         var modsFolder = Path.Combine(gameFolder, "Vein", "Binaries", "Win64", "ue4ss", "Mods");
         if (Directory.Exists(modsFolder))
         {
-            foreach (var candidate in Directory.EnumerateDirectories(modsFolder, "ItemAndContainerModifier", SearchOption.TopDirectoryOnly))
+            foreach (var candidate in Directory.EnumerateDirectories(modsFolder, ModName, SearchOption.TopDirectoryOnly))
             {
                 if (IsValidModFolder(candidate)) return candidate;
             }
@@ -75,6 +76,47 @@ public static partial class LuaModService
         }
 
         CopyDirectoryMissingOnly(template, modFolder);
+        EnsureModEnabled(modFolder);
+        return true;
+    }
+
+    public static bool EnsureModEnabled(string modFolder)
+    {
+        if (!IsValidModFolder(modFolder)) return false;
+
+        var modsFolder = Directory.GetParent(modFolder)?.FullName;
+        if (string.IsNullOrWhiteSpace(modsFolder)) return false;
+
+        Directory.CreateDirectory(modsFolder);
+        var modsFile = Path.Combine(modsFolder, "mods.txt");
+        var lines = File.Exists(modsFile)
+            ? File.ReadAllLines(modsFile, Encoding.UTF8).ToList()
+            : new List<string>();
+
+        var entryPattern = new Regex(@"^\s*" + Regex.Escape(ModName) + @"\s*:", RegexOptions.IgnoreCase);
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (!entryPattern.IsMatch(lines[i])) continue;
+
+            if (lines[i].Trim().Equals(ModName + " : 1", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            BackupModsFile(modsFile);
+            lines[i] = ModName + " : 1";
+            File.WriteAllLines(modsFile, lines, Encoding.UTF8);
+            return true;
+        }
+
+        BackupModsFile(modsFile);
+        if (lines.Count > 0 && !string.IsNullOrWhiteSpace(lines[^1]))
+        {
+            lines.Add(string.Empty);
+        }
+
+        lines.Add(ModName + " : 1");
+        File.WriteAllLines(modsFile, lines, Encoding.UTF8);
         return true;
     }
 
@@ -348,6 +390,7 @@ public static partial class LuaModService
         var uiConfigPath = Path.Combine(scripts, "ui_config.lua");
         EnsureConfigPatched(Path.Combine(scripts, "config.lua"));
         WriteUiConfigAtomic(uiConfigPath, state);
+        EnsureModEnabled(modFolder);
     }
 
     public static ConfigInstallResult InstallUiConfig(string modFolder, string sourceUiConfigPath)
@@ -866,6 +909,14 @@ public static partial class LuaModService
     private static void CopyIfExists(string source, string destination)
     {
         if (File.Exists(source)) File.Copy(source, destination, overwrite: true);
+    }
+
+    private static void BackupModsFile(string modsFile)
+    {
+        if (!File.Exists(modsFile)) return;
+
+        var backup = modsFile + ".vein-manager-backup-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        File.Copy(modsFile, backup, overwrite: false);
     }
 
     private static string ReplaceOnce(string text, string oldValue, string newValue)
